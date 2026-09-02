@@ -1,0 +1,20 @@
+# Godot
+game/.godot/
+game/export_presets.cfg
+game/build/
+*.tmp
+
+# Builds & artifacts
+*.apk
+*.aab
+dist/
+server/out/
+
+# IDE
+.vs/
+.idea/
+*.swp
+.DS_Store
+
+# Node (tooling, if any)
+node_modules/
