@@ -124,6 +124,8 @@ static func create(team: int, is_player: bool, color: Color = Color.WHITE,
 		h.add_child(ab)
 		h.ability = ab
 		ab.setup(hero_data, h)
+		# Balance layer (content/balance/): per-hero tuning multipliers.
+		Balance.apply_to(h, hero_data)
 
 	# Camera rig (players only): plain offset camera (over-the-shoulder).
 	# Godot 4.7 reworked SpringArm3D (shape + spring_length); a fixed offset is

@@ -14,6 +14,8 @@ const _DASH_LOCK := 0.15
 
 var hero_data: HeroData = null
 var owner_ref: CharacterEntity = null
+## Balance-layer charge scaling (content/balance/), set by HeroFactory.
+var ult_charge_mult := 1.0
 
 var charge: float = 0.0
 var _cooldown_until: Array = []
@@ -312,6 +314,6 @@ func _add_charge(x: float) -> void:
 	if charge >= hero_data.ult_max:
 		return
 	var before := charge
-	charge = minf(charge + x, hero_data.ult_max)
+	charge = minf(charge + x * ult_charge_mult, hero_data.ult_max)
 	if before < hero_data.ult_max and charge >= hero_data.ult_max:
 		ult_ready.emit()

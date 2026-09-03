@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="BalanceEntry" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://content/balance/balance_entry.gd" id="1_be"]
+
+[resource]
+script = ExtResource("1_be")
+hero_id = "bastion"
+hp_mult = 1.0
+damage_mult = 1.0
+fire_rate_mult = 1.0
+speed_mult = 1.0
+ult_charge_mult = 1.0
+notes = "baseline sheet (kit values)"
