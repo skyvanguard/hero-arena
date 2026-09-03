@@ -163,7 +163,8 @@ func _respawn(target: CharacterEntity) -> void:
 	if pts.size() > 1:
 		facing = (pts[(idx + 1) % pts.size()] - p).normalized()
 	target.respawn(p, facing)
-	emit_event("respawn", {"name" = _name_of(target), "team" = target.team})
+	emit_event("respawn", {"name" = _name_of(target), "team" = target.team,
+		"ch" = target, "pos" = p})
 
 func _name_of(ch: CharacterEntity) -> String:
 	if ch == null:
