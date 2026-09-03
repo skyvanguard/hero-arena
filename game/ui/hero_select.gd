@@ -5,9 +5,12 @@ extends CanvasLayer
 
 signal hero_deployed(hero: HeroData)
 signal range_deployed(hero: HeroData)
+signal net_deployed(host_port: String, hero: HeroData)
 
 var _deploy_btn: Control
 var _practice_btn: Control
+var _join_edit: LineEdit
+var _join_btn: Button
 var _hero: HeroData = null
 var _cards: Array = []
 var _diff_btns: Array = []
@@ -113,6 +116,7 @@ func _build() -> void:
 
 	_make_deploy(vp)
 	_make_practice(vp)
+	_make_join_row(vp)
 	_make_difficulty_row(vp)
 
 func _draw_card(c: Control, hd: HeroData) -> void:
@@ -173,6 +177,32 @@ func _make_practice(vp: Vector2) -> Control:
 	)
 	add_child(c)
 	return c
+
+func _make_join_row(vp: Vector2) -> void:
+	# LAN join (Phase 5 v1, directive §21): host:port direct connect.
+	_join_edit = LineEdit.new()
+	_join_edit.placeholder_text = "host:port  (LAN)"
+	_join_edit.position = Vector2(vp.x * 0.5 - 106.0, vp.y - 158.0)
+	_join_edit.size = Vector2(130.0, 26.0)
+	_join_edit.add_theme_font_size_override("font_size", 12)
+	_join_edit.text_submitted.connect(_on_join_text)
+	add_child(_join_edit)
+	_join_btn = Button.new()
+	_join_btn.text = "JOIN"
+	_join_btn.position = Vector2(vp.x * 0.5 + 30.0, vp.y - 158.0)
+	_join_btn.size = Vector2(76.0, 26.0)
+	_join_btn.add_theme_font_size_override("font_size", 12)
+	_join_btn.pressed.connect(_join)
+	add_child(_join_btn)
+
+func _on_join_text(_t: String) -> void:
+	_join()
+
+func _join() -> void:
+	var hp := _join_edit.text.strip_edges()
+	if hp.is_empty() or _hero == null:
+		return
+	net_deployed.emit(hp, _hero)
 
 func _practice() -> void:
 	if _hero == null:

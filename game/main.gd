@@ -9,6 +9,7 @@ var world: World
 var player: Hero
 var bots: Array = []
 var practice: PracticeManager = null
+var _net_client: MatchClient = null
 var _accum := 0.0
 var _hero_select: HeroSelect
 var _in_range := false
@@ -26,6 +27,22 @@ func _ready() -> void:
 	add_child(_hero_select)
 	_hero_select.hero_deployed.connect(_on_deploy)
 	_hero_select.range_deployed.connect(_on_range)
+	_hero_select.net_deployed.connect(_on_net_deploy)
+
+func _on_net_deploy(host_port: String, hero_data: HeroData) -> void:
+	# LAN match (Phase 5 v1): the MatchClient owns the render side; main only
+	# tracks teardown + the results overlay.
+	if _hero_select != null:
+		_hero_select.queue_free()
+		_hero_select = null
+	_net_client = MatchClient.new()
+	add_child(_net_client)
+	_match_nodes.append(_net_client)
+	_net_client.ended.connect(_on_net_ended)
+	_net_client.setup(host_port, hero_data)
+
+func _on_net_ended(winner: int, score: Array, wtime: float, lost: bool, title: String) -> void:
+	_show_results(winner, score, wtime, title if lost else "")
 
 func _on_deploy(hero_data: HeroData) -> void:
 	if _hero_select != null:
@@ -147,7 +164,7 @@ func _on_world_event(name: String, data: Dictionary) -> void:
 
 ## TDM results overlay (VICTORY/DEFEAT/DRAW + final score + duration);
 ## any tap returns to the hero select.
-func _show_results(winner: int, score: Array, wtime: float) -> void:
+func _show_results(winner: int, score: Array, wtime: float, title_override := "") -> void:
 	_results = CanvasLayer.new()
 	_results.layer = 100
 	add_child(_results)
@@ -174,7 +191,7 @@ func _show_results(winner: int, score: Array, wtime: float) -> void:
 	# which would swallow the tap — see the hint label incident).
 	var title := Label.new()
 	title.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	title.text = "VICTORY" if winner == 0 else ("DEFEAT" if winner == 1 else "DRAW")
+	title.text = title_override if title_override != "" else ("VICTORY" if winner == 0 else ("DEFEAT" if winner == 1 else "DRAW"))
 	title.position = Vector2(vp.x * 0.5 - 160, vp.y * 0.28)
 	title.size = Vector2(320, 64)
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -215,6 +232,8 @@ func _exit_to_select() -> void:
 	if _results != null:
 		_results.queue_free()
 		_results = null
+	if _net_client != null and is_instance_valid(_net_client):
+		_net_client.exit()
 	for n in _match_nodes:
 		if is_instance_valid(n):
 			n.queue_free()
@@ -226,6 +245,8 @@ func _exit_to_select() -> void:
 	add_child(_hero_select)
 	_hero_select.hero_deployed.connect(_on_deploy)
 	_hero_select.range_deployed.connect(_on_range)
+	_hero_select.net_deployed.connect(_on_net_deploy)
+	_net_client = null
 
 func _start_range(hero_data: HeroData) -> void:
 	_in_range = true
