@@ -1,0 +1,69 @@
+[gd_resource type="Resource" script_class="HeroData" load_steps=6 format=3]
+
+[ext_resource type="Script" path="res://content/heroes/hero_data.gd" id="1_hd"]
+[ext_resource type="Script" path="res://content/heroes/passive_data.gd" id="2_pd"]
+[ext_resource type="Script" path="res://content/heroes/ability_data.gd" id="3_ad"]
+
+[sub_resource type="Resource" script_class="PassiveData" id="Resource_plating"]
+script = ExtResource("2_pd")
+id = "reactive_plating"
+display_name = "Reactive Plating"
+kind = 2
+params = {
+"dmg_reduce": 0.2
+}
+
+[sub_resource type="Resource" script_class="AbilityData" id="Resource_bulwark"]
+script = ExtResource("3_ad")
+id = "bulwark_charge"
+display_name = "Bulwark Charge"
+kind = 0
+cooldown = 7.0
+is_ult = false
+params = {"count": 1, "distance": 5.0, "speed": 18.0}
+
+[sub_resource type="Resource" script_class="AbilityData" id="Resource_quake"]
+script = ExtResource("3_ad")
+id = "quake_stomp"
+display_name = "Quake Stomp"
+kind = 1
+cooldown = 10.0
+is_ult = false
+params = {"pellets": 8, "cone_deg": 120.0, "damage": 6.0, "slow_ratio": 0.35, "slow_duration": 2.0}
+
+[sub_resource type="Resource" script_class="AbilityData" id="Resource_laststand"]
+script = ExtResource("3_ad")
+id = "last_stand"
+display_name = "Last Stand"
+kind = 2
+cooldown = 0.0
+is_ult = true
+params = {"duration": 6.0, "fire_rate_mult": 1.5, "speed_mult": 1.2, "damage_mult": 1.4, "spread_mult": 1.0}
+
+[resource]
+script = ExtResource("1_hd")
+id = "bastion"
+display_name = "Bastion"
+role = 1
+sub_role = 2
+color = Color(0.85, 0.4, 0.25, 1)
+max_hp = 200
+base_speed = 5.0
+jump_velocity = 5.2
+weapon = {
+"clip_size": 8,
+"damage": 6.0,
+"fire_rate": 1.6,
+"headshot_mult": 1.5,
+"max_range": 30.0,
+"pellets": 8,
+"reload_time": 2.4,
+"spread_deg": 12.0
+}
+passive = SubResource("Resource_plating")
+abilities = Array[Resource]([SubResource("Resource_bulwark"), SubResource("Resource_quake")])
+ult = SubResource("Resource_laststand")
+ult_max = 100.0
+charge_per_damage_dealt = 0.25
+charge_per_damage_taken = 0.08
+charge_per_kill = 20.0

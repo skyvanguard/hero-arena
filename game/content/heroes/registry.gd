@@ -5,6 +5,8 @@ extends RefCounted
 
 const HEROES: Array = [
 	preload("res://content/heroes/kestrel.tres"),
+	preload("res://content/heroes/blitz.tres"),
+	preload("res://content/heroes/bastion.tres"),
 ]
 
 static func count() -> int:

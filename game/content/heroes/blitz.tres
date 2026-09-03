@@ -1,0 +1,71 @@
+[gd_resource type="Resource" script_class="HeroData" load_steps=6 format=3]
+
+[ext_resource type="Script" path="res://content/heroes/hero_data.gd" id="1_hd"]
+[ext_resource type="Script" path="res://content/heroes/passive_data.gd" id="2_pd"]
+[ext_resource type="Script" path="res://content/heroes/ability_data.gd" id="3_ad"]
+
+[sub_resource type="Resource" script_class="PassiveData" id="Resource_overdrive"]
+script = ExtResource("2_pd")
+id = "overdrive"
+display_name = "Overdrive"
+kind = 1
+params = {
+"speed_mult": 1.12
+}
+
+[sub_resource type="Resource" script_class="AbilityData" id="Resource_blink"]
+script = ExtResource("3_ad")
+id = "blink_step"
+display_name = "Blink Step"
+kind = 0
+cooldown = 5.0
+is_ult = false
+params = {"count": 2, "distance": 6.0, "speed": 16.0}
+
+[sub_resource type="Resource" script_class="AbilityData" id="Resource_shredder"]
+script = ExtResource("3_ad")
+id = "shredder_round"
+display_name = "Shredder Round"
+kind = 1
+cooldown = 8.0
+is_ult = false
+params = {"pellets": 10, "cone_deg": 30.0, "damage": 4.0}
+
+[sub_resource type="Resource" script_class="AbilityData" id="Resource_overclock"]
+script = ExtResource("3_ad")
+id = "overclock"
+display_name = "Overclock"
+kind = 2
+cooldown = 0.0
+is_ult = true
+params = {"duration": 6.0, "fire_rate_mult": 1.8, "speed_mult": 1.5, "damage_mult": 1.3, "spread_mult": 0.8}
+
+[resource]
+script = ExtResource("1_hd")
+id = "blitz"
+display_name = "Blitz"
+role = 0
+sub_role = 1
+color = Color(0.95, 0.72, 0.2, 1)
+max_hp = 100
+base_speed = 7.0
+jump_velocity = 5.8
+weapon = {
+"mode": "projectile",
+"clip_size": 42,
+"damage": 5.0,
+"fire_rate": 14.0,
+"headshot_mult": 1.5,
+"max_range": 45.0,
+"proj_range": 40.0,
+"proj_speed": 24.0,
+"reload_time": 1.7,
+"spread_deg": 1.2
+}
+passive = SubResource("Resource_overdrive")
+abilities = Array[Resource]([SubResource("Resource_blink"), SubResource("Resource_shredder")])
+ult = SubResource("Resource_overclock")
+ult_max = 100.0
+charge_per_damage_dealt = 0.3
+charge_per_damage_taken = 0.12
+charge_per_kill = 15.0
