@@ -12,6 +12,13 @@ var projectiles: Array[Projectile] = []
 var zones: Array[ZoneEntity] = []
 var spawn_points: Dictionary = {}  # team(int) -> Array[Vector3]
 var score: Dictionary = {0: 0, 1: 0}
+## TDM end condition (directive §6: 3–8 min matches). Set from MatchConfig by
+## the match host; first team to target_score wins, else higher score at
+## match_duration (draw if equal). Emitted once via "match_over".
+var target_score := 15
+var match_duration := 300.0
+var match_over := false
+var winner := -1  # 0 / 1 / -1 (draw or undecided)
 var _timers: Array = []            # [{at: float, fn: Callable}]
 
 func emit_event(name: String, data: Dictionary) -> void:
@@ -53,6 +60,10 @@ func schedule(at_time: float, fn: Callable) -> void:
 	_timers.append({at = at_time, fn = fn})
 
 func step(dt: float) -> void:
+	if match_over:
+		# Match finished: freeze the sim (score/respawns stop, the results
+		# overlay owns the screen until the player returns to select).
+		return
 	time += dt
 	var due: Array[Callable] = []
 	var keep: Array = []
@@ -83,6 +94,22 @@ func step(dt: float) -> void:
 		if not z.dead:
 			alive_z.append(z)
 	zones = alive_z
+	_check_match_over()
+
+func _check_match_over() -> void:
+	if match_over:
+		return
+	var s0: int = int(score.get(0, 0))
+	var s1: int = int(score.get(1, 0))
+	if s0 >= target_score or s1 >= target_score:
+		_finish_match(0 if s0 > s1 else (1 if s1 > s0 else -1))
+	elif time >= match_duration:
+		_finish_match(0 if s0 > s1 else (1 if s1 > s0 else -1))
+
+func _finish_match(w: int) -> void:
+	match_over = true
+	winner = w
+	emit_event("match_over", {"winner" = w, "score" = [int(score.get(0, 0)), int(score.get(1, 0))], "time" = time})
 
 func world_protected(target: CharacterEntity) -> bool:
 	return time < target.protected_until

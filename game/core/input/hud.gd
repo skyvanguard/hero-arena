@@ -20,6 +20,8 @@ var _hp_label: Label
 var _ammo_label: Label
 var _respawn_label: Label
 var _score_label: Label
+var _timer_label: Label
+var _timer_shown := -1
 var _feed: VBoxContainer
 var _feed_lines: Array[Label] = []
 var _feed_next := 0
@@ -83,6 +85,12 @@ func _build() -> void:
 	_score_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_score_label.add_theme_font_size_override("font_size", 24)
 	root.add_child(_score_label)
+	_timer_label = Label.new()
+	_timer_label.position = Vector2(vp.x * 0.5 - 80, 44)
+	_timer_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_timer_label.add_theme_font_size_override("font_size", 15)
+	_timer_label.modulate = Color(0.85, 0.9, 1.0, 0.9)
+	root.add_child(_timer_label)
 
 	_feed = VBoxContainer.new()
 	_feed.position = Vector2(vp.x - 320, 16)
@@ -184,6 +192,18 @@ func _process(delta: float) -> void:
 		if stxt != _score_txt:
 			_score_txt = stxt
 			_score_label.text = stxt
+		# Match timer: write only when the displayed second changes.
+		var remain: int
+		if world.match_over:
+			remain = -1
+		else:
+			remain = int(ceilf(maxf(0.0, world.match_duration - world.time)))
+		if remain != _timer_shown:
+			_timer_shown = remain
+			if remain < 0:
+				_timer_label.text = "FINAL"
+			else:
+				_timer_label.text = "%d:%02d" % [remain / 60, remain % 60]
 		var rtxt := ""
 		if not player.alive:
 			var left := maxf(0.0, player.respawn_time - (world.time - player.death_time))
