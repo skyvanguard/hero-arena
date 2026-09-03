@@ -27,6 +27,22 @@ func _ready() -> void:
 	add_child(world)
 	add_child(Arena.build(world))
 	check("roster: 6 heroes registered", HeroRegistry.count() == 6, "n=%d" % HeroRegistry.count())
+	# Balance config (content/balance/): one entry per registered hero.
+	check("balance: entry per hero", Balance.entry_count() == HeroRegistry.count(),
+		"entries=%d heroes=%d" % [Balance.entry_count(), HeroRegistry.count()])
+	var missing := ""
+	for h in HeroRegistry.HEROES:
+		var hd0: HeroData = h
+		if Balance.entry_for(hd0.id) == null:
+			missing += hd0.id + " "
+	check("balance: all heroes have entries", missing == "", "missing: " + missing)
+	# Ult-charge pacing: even a damage-free player ults within 12 kills.
+	var pacing := ""
+	for h in HeroRegistry.HEROES:
+		var hd1: HeroData = h
+		if hd1.charge_per_kill <= 0.0 or hd1.ult_max / hd1.charge_per_kill > 12.0:
+			pacing += hd1.id + "(%.0fk) " % (hd1.ult_max / maxf(hd1.charge_per_kill, 0.001))
+	check("balance: ult pacing <= 12 kills (worst case)", pacing == "", pacing)
 	for h in HeroRegistry.HEROES:
 		var hd: HeroData = h
 		await _validate_kit(hd)
@@ -34,7 +50,7 @@ func _ready() -> void:
 	# Passive-specific identity checks
 	await _check_passive_identities()
 	# Balance table (printed for docs; bands enforced above)
-	print("--- BALANCE TABLE (100 hp standard dummy, %s window) ---" % FIRE_SECONDS)
+	print("--- BALANCE TABLE (generated from content/balance/, 100 hp dummy, %s window) ---" % FIRE_SECONDS)
 	for row in dps_table:
 		var rdps := float(row.dps)
 		var ttk: float = 100.0 / rdps if rdps > 0.0 else -1.0
@@ -120,24 +136,23 @@ func _measure_dps(hd: HeroData) -> void:
 	var dps := dealt / FIRE_SECONDS
 	dps_table.append({id = hd.id, cls = _class_of(hd), dps = dps, note = "dealt=%.0f" % dealt})
 	check("%s: weapon pipeline deals damage (dps>0)" % hd.id, dps > 0.0, "dps=%.1f" % dps)
-	# Role-sanity bands (loose now; content/balance/ tightens in Phase 3)
-	var band_ok := true
-	var note := ""
-	match hd.role:
-		HeroData.Role.ASSAULT:
-			band_ok = dps > 25.0
-			note = "assault dps band >25"
-		HeroData.Role.TANK:
-			band_ok = dps > 1.0 and hero.max_hp >= 180.0
-			note = "tank dps>1, hp>=180"
-		HeroData.Role.SUPPORT:
-			band_ok = dps > 25.0
-			note = "support dps band >25 (secondary gun)"
-		HeroData.Role.CONTROLLER:
-			band_ok = dps > 15.0
-			note = "controller dps band >15"
+	# Role-sanity bands from the balance config (content/balance/).
+	var role_name: String = ["ASSAULT", "TANK", "SUPPORT", "CONTROLLER"][hd.role]
+	var band: Dictionary = Balance.BANDS.get(role_name, {})
+	var band_ok := band.size() > 0
+	if band_ok:
+		band_ok = dps >= float(band.min_dps) and dps <= float(band.max_dps) \
+			and hero.max_hp >= float(band.min_hp)
+	var note := "band %s dps[%.0f..%.0f] hp>=%.0f" % [
+		role_name,
+		float(band.get("min_dps", 0.0)), float(band.get("max_dps", 0.0)),
+		float(band.get("min_hp", 0.0)),
+	]
+	var entry: BalanceEntry = Balance.entry_for(hd.id)
+	if entry != null:
+		note += " | " + entry.notes
 	dps_table[dps_table.size() - 1].note += " | " + note
-	check("%s: role band sanity" % hd.id, band_ok, "dps=%.1f hp=%.0f" % [dps, hero.max_hp])
+	check("%s: role band (config)" % hd.id, band_ok, "dps=%.1f hp=%.0f" % [dps, hero.max_hp])
 
 func _class_of(hd: HeroData) -> String:
 	var roles := ["assault", "tank", "support", "controller"]
