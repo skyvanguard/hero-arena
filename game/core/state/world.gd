@@ -100,6 +100,7 @@ func kill(target: CharacterEntity, source: CharacterEntity, is_head: bool) -> vo
 		return
 	target.alive = false
 	target.death_pos = target.global_position
+	target.death_time = time
 	if source != null:
 		score[source.team] = int(score.get(source.team, 0)) + 1
 		if source.ability != null:
@@ -120,6 +121,10 @@ func _make_respawn(target: CharacterEntity) -> Callable:
 	return func() -> void: _respawn(target)
 
 func _respawn(target: CharacterEntity) -> void:
+	# A freed character (tests free bots mid-match) can still have a pending
+	# respawn lambda; is_instance_valid is the only safe check on it.
+	if not is_instance_valid(target):
+		return
 	if target.alive:
 		return
 	var pts: Array = spawn_points.get(target.team, [])

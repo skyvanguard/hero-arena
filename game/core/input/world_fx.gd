@@ -5,11 +5,21 @@ extends Node
 
 var world: World
 var _labels: Array[Label3D] = []
+## Memory-leak bisect toggles (temporary): debug/no_* project settings.
+var no_tracers := false
+var no_labels := false
+var no_particles := false
+
+static func _dbg(key: String) -> bool:
+	return bool(ProjectSettings.get_setting("debugperf/" + key, false))
 
 func setup(world_: World) -> void:
 	world = world_
 	if DisplayServer.get_name() == "headless":
 		return
+	no_tracers = _dbg("no_tracers")
+	no_labels = _dbg("no_labels")
+	no_particles = _dbg("no_particles")
 	world.world_event.connect(_on_world_event)
 
 func _on_world_event(name: String, data: Dictionary) -> void:
@@ -17,13 +27,15 @@ func _on_world_event(name: String, data: Dictionary) -> void:
 		return
 	match name:
 		"hit":
-			_spawn_damage_number(data)
+			if not no_labels:
+				_spawn_damage_number(data)
 		"heal":
 			# Continuous field ticks are sub-1.0; only label meaningful heals.
-			if float(data.get("amount", 0.0)) >= 1.0:
+			if not no_labels and float(data.get("amount", 0.0)) >= 1.0:
 				_spawn_heal_number(data)
 		"shot":
-			_spawn_tracer(data)
+			if not no_tracers:
+				_spawn_tracer(data)
 		"ability_cast":
 			_spawn_ability_fx(data)
 		"dummy_reset":
@@ -50,6 +62,8 @@ func _spawn_damage_number(data: Dictionary) -> void:
 	_labels.erase(l)
 
 func _spawn_ability_fx(data: Dictionary) -> void:
+	if no_particles:
+		return
 	var hero: CharacterEntity = data.get("hero")
 	if hero == null or not is_instance_valid(hero):
 		return
@@ -70,6 +84,8 @@ func _spawn_ability_fx(data: Dictionary) -> void:
 			world.schedule(world.time + 5.6, ring.queue_free)
 
 func _particle_burst(pos: Vector3, col: Color, amount: int, speed: float, life: float) -> void:
+	if no_particles:
+		return
 	var p := GPUParticles3D.new()
 	var pg := ParticleProcessMaterial.new()
 	pg.direction = Vector3(0, 1, 0)
