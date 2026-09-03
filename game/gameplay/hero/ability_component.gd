@@ -56,6 +56,7 @@ func cast(index: int) -> bool:
 	var ab: AbilityData = hero_data.abilities[index]
 	_cooldown_until[index] = world.time + ab.cooldown
 	ability_cast.emit(index, ab)
+	world.emit_event("ability_cast", {"hero" = owner_ref, "id" = ab.id, "kind" = ab.kind})
 	_execute(world, ab)
 	return true
 
@@ -171,6 +172,7 @@ func activate_ult() -> bool:
 		return false
 	charge = 0.0
 	ability_cast.emit(hero_data.abilities.size(), hero_data.ult)
+	world.emit_event("ability_cast", {"hero" = owner_ref, "id" = hero_data.ult.id, "kind" = hero_data.ult.kind})
 	_execute(world, hero_data.ult)
 	return true
 

@@ -103,6 +103,7 @@ func _update_timers(world: World, dt: float) -> void:
 	if _jump_buffered and (is_on_floor() or _coyote > 0.0):
 		velocity.y = jump_velocity
 		_jump_buffered = false
+		world_ref.emit_event("jump", {"ch" = self})
 	elif _jump_buffered:
 		_jump_buffered = false
 
