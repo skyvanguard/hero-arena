@@ -35,6 +35,12 @@ func step(world: World, dt: float) -> void:
 			buffer_jump()
 		if Controls.consume_reload():
 			weapon.start_reload()
+		if Controls.consume_ability1() and ability != null:
+			ability.cast(0)
+		if Controls.consume_ability2() and ability != null:
+			ability.cast(1)
+		if Controls.consume_ultimate() and ability != null:
+			ability.activate_ult()
 		if camera_rig != null:
 			var aim: Vector2
 			if Controls.aim != Vector2.ZERO:
@@ -47,6 +53,7 @@ func step(world: World, dt: float) -> void:
 		want_fire = Controls.fire
 	# Timers, regen, movement, physics — same path for humans and bots.
 	super.step(world, dt)
+	_sync_ability_mults()
 	if is_player:
 		var cf := _camera_forward()
 		weapon.update(world, dt, want_fire, cf)
@@ -57,6 +64,17 @@ func step(world: World, dt: float) -> void:
 			var dir := (aim_target - muzzle_pos()).normalized()
 			weapon.update(world, dt, true, dir)
 			face_toward(aim_target)
+
+func _sync_ability_mults() -> void:
+	if ability != null:
+		weapon.fire_rate_mult = ability.fire_rate_mult()
+		weapon.damage_mult = ability.damage_mult()
+		weapon.spread_mult = ability.spread_mult()
+
+func aim_direction() -> Vector3:
+	if is_player:
+		return _camera_forward().normalized()
+	return super.aim_direction()
 
 func _camera_forward() -> Vector3:
 	# In Godot 4.7 the camera view direction equals basis * Vector3.FORWARD

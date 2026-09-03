@@ -6,12 +6,19 @@ extends RefCounted
 
 const BODY_H := 1.8
 
-static func create(team: int, is_player: bool, color: Color) -> Hero:
+static func create(team: int, is_player: bool, color: Color = Color.WHITE,
+		hero_data: HeroData = null) -> Hero:
+	if hero_data != null and color == Color.WHITE:
+		color = hero_data.color
 	var h := Hero.new()
 	h.name = "Hero_%d_%d" % [team, randi() % 1000]
 	h.team = team
 	h.display_name = ("You" if is_player else "Bot") + " %d" % (team * 10 + randi() % 10)
 	h.is_player = is_player
+	if hero_data != null:
+		h.max_hp = hero_data.max_hp
+		h.base_speed = hero_data.base_speed
+		h.jump_velocity = hero_data.jump_velocity
 	h.collision_layer = CharacterEntity.LAYER_BODY
 	h.collision_mask = CharacterEntity.LAYER_WORLD | CharacterEntity.LAYER_BODY | CharacterEntity.LAYER_HEAD
 
@@ -110,6 +117,13 @@ static func create(team: int, is_player: bool, color: Color) -> Hero:
 	h.weapon = weapon
 	weapon.setup(h)
 	weapon.ready()
+	if hero_data != null:
+		_apply_weapon_profile(weapon, hero_data.weapon)
+		var ab := AbilityComponent.new()
+		ab.name = "Ability"
+		h.add_child(ab)
+		h.ability = ab
+		ab.setup(hero_data, h)
 
 	# Camera rig (players only): plain offset camera (over-the-shoulder).
 	# Godot 4.7 reworked SpringArm3D (shape + spring_length); a fixed offset is
@@ -131,3 +145,13 @@ static func create(team: int, is_player: bool, color: Color) -> Hero:
 	# Character origin: capsule center at 0.9 above floor.
 	h.position.y = BODY_H * 0.5
 	return h
+
+static func _apply_weapon_profile(weapon: Weapon, profile: Dictionary) -> void:
+	weapon.damage = float(profile.get("damage", weapon.damage))
+	weapon.headshot_mult = float(profile.get("headshot_mult", weapon.headshot_mult))
+	weapon.fire_rate = float(profile.get("fire_rate", weapon.fire_rate))
+	weapon.clip_size = int(profile.get("clip_size", weapon.clip_size))
+	weapon.reload_time = float(profile.get("reload_time", weapon.reload_time))
+	weapon.max_range = float(profile.get("max_range", weapon.max_range))
+	weapon.spread_deg = float(profile.get("spread_deg", weapon.spread_deg))
+	weapon.ready()

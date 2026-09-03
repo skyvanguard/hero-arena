@@ -13,6 +13,11 @@ extends Node
 @export var spread_deg := 0.5
 @export var reserve_infinite := true
 
+## Ability-driven multipliers, synced by the hero each tick (server-side).
+var fire_rate_mult := 1.0
+var damage_mult := 1.0
+var spread_mult := 1.0
+
 var ammo := 0
 var reloading := false
 var shots_fired := 0
@@ -49,7 +54,7 @@ func update(world: World, dt: float, firing: bool, dir: Vector3) -> void:
 			ammo = clip_size
 			world.emit_event("reload_done", {"ch" = _owner})
 	if firing and not reloading and _cd <= 0.0 and ammo > 0:
-		_cd = 1.0 / fire_rate
+		_cd = 1.0 / (fire_rate * fire_rate_mult)
 		ammo -= 1
 		shots_fired += 1
 		_fire(world, dir)
@@ -81,8 +86,11 @@ func _fire(world: World, dir: Vector3) -> void:
 			if res.collider is Area3D:
 				is_head = true
 	if hit_ch != null and hit_ch != _owner:
-		var dmg := damage * (headshot_mult if is_head else 1.0)
+		var dmg := damage * damage_mult * (headshot_mult if is_head else 1.0)
 		world.damage(hit_ch, dmg, _owner, is_head, end)
+		if _owner.ability != null:
+			_owner.ability.on_damage_dealt(dmg)
+			_owner.ability.on_hit_landed()
 	world.emit_event("shot", {
 		"shooter" = _owner, "from" = origin, "to" = end,
 		"hit" = hit_ch != null,
@@ -90,7 +98,7 @@ func _fire(world: World, dir: Vector3) -> void:
 
 func _apply_spread(dir: Vector3) -> Vector3:
 	var base := dir.normalized()
-	var err := deg_to_rad(spread_deg)
+	var err := deg_to_rad(spread_deg * spread_mult)
 	var v := base
 	v += (Vector3.RIGHT * randf_range(-err, err) + Vector3.UP * randf_range(-err, err))
 	return v.normalized()

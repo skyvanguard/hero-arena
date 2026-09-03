@@ -52,6 +52,12 @@ func _build() -> void:
 			Color(0.4, 0.8, 1.0, 0.45), func() -> void: Controls.jump = true)
 	_make_button("RELOAD", Vector2(vp.x - 60.0, vp.y - 240.0), BTN_R,
 			Color(1.0, 0.8, 0.3, 0.45), func() -> void: Controls.reload = true)
+	_make_button("Q", Vector2(vp.x - 240.0, vp.y - 330.0), 30.0,
+			Color(0.6, 0.5, 1.0, 0.5), func() -> void: Controls.ability1 = true)
+	_make_button("E", Vector2(vp.x - 160.0, vp.y - 330.0), 30.0,
+			Color(0.6, 0.5, 1.0, 0.5), func() -> void: Controls.ability2 = true)
+	_make_button("F", Vector2(vp.x - 80.0, vp.y - 330.0), 34.0,
+			Color(1.0, 0.6, 0.9, 0.55), func() -> void: Controls.ultimate = true)
 
 func _make_button(label_text: String, pos: Vector2, radius: float, color: Color,
 		on_touched: Callable) -> Control:

@@ -36,6 +36,7 @@ var death_pos := Vector3.ZERO
 var world_ref: World = null
 var controller: Node = null          # BotController or player-input node
 var is_player := false
+var ability: AbilityComponent = null # Phase 2 kit (hero data driven)
 
 # Controller -> character interface (filled each tick before physics):
 var move_input := Vector2.ZERO
@@ -46,6 +47,9 @@ var _jump_buffered := false
 var _coyote := 0.0
 var _since_damage := 1e9
 var protected_until := 0.0
+var slow_ratio := 0.0     ## strongest active slow (0..1), decays via slow_until
+var slow_until := 0.0
+var dash_lock_until := 0.0  ## while active, movement blend is skipped (dash impulse holds)
 var _head_marker: Marker3D
 var _muzzle: Marker3D
 var _body_visible := true
@@ -80,9 +84,18 @@ func step(world: World, dt: float) -> void:
 		# No active controller: no stale input may persist (server authority).
 		move_input = Vector2.ZERO
 		want_fire = false
+	if ability != null:
+		ability.step(world, dt)
+	if world.time >= slow_until:
+		slow_ratio = 0.0
 	_update_timers(world, dt)
 	_update_regen(world, dt)
 	_update_physics(world, dt)
+
+func apply_slow(world: World, ratio: float, duration: float) -> void:
+	var new_ratio := ratio if world.time >= slow_until else maxf(slow_ratio, ratio)
+	slow_ratio = new_ratio
+	slow_until = maxf(slow_until, world.time + duration)
 
 func _update_timers(world: World, dt: float) -> void:
 	_since_damage += dt
@@ -110,14 +123,27 @@ func _update_physics(world: World, dt: float) -> void:
 		vel.y -= GRAVITY * dt
 	var fwd := global_transform.basis * FWD
 	var right := global_transform.basis * Vector3.RIGHT
-	var wish := (fwd * move_input.y + right * move_input.x) * base_speed
+	var spd := base_speed
+	if ability != null:
+		spd *= ability.speed_mult()
+	spd *= (1.0 - slow_ratio)
+	var wish := (fwd * move_input.y + right * move_input.x) * spd
 	var cur := Vector3(vel.x, 0.0, vel.z)
-	var blend := minf(1.0, 12.0 * dt) if is_on_floor() else minf(1.0, 5.0 * dt)
+	var blend := 0.0 if world.time < dash_lock_until else (minf(1.0, 12.0 * dt) if is_on_floor() else minf(1.0, 5.0 * dt))
 	cur = cur.lerp(wish, blend)
 	vel.x = cur.x
 	vel.z = cur.z
 	velocity = vel
 	move_and_slide()
+
+## Direction the character aims its weapon/abilities at. Hero overrides with
+## camera (player) or aim_target (bot) awareness. Base: local forward.
+func aim_direction() -> Vector3:
+	if aim_target != Vector3.ZERO:
+		var d := aim_target - global_position
+		if d.length_squared() > 0.001:
+			return d.normalized()
+	return (global_transform.basis * FWD).normalized()
 
 func face_toward(target_pos: Vector3) -> void:
 	var d := (target_pos - global_position)
@@ -129,6 +155,8 @@ func apply_damage(amount: float, source: CharacterEntity, is_head: bool,
 		hit_pos: Vector3, prot: bool) -> void:
 	if not alive:
 		return
+	if ability != null:
+		ability.on_damage_taken(amount)
 	hp -= amount
 	_since_damage = 0.0
 	world_ref.emit_event("hit", {

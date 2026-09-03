@@ -1,0 +1,76 @@
+[gd_resource type="Resource" script_class="HeroData" load_steps=6 format=3]
+
+[ext_resource type="Script" path="res://content/heroes/hero_data.gd" id="1_hd"]
+[ext_resource type="Script" path="res://content/heroes/passive_data.gd" id="2_pd"]
+[ext_resource type="Script" path="res://content/heroes/ability_data.gd" id="3_ad"]
+
+[sub_resource type="Resource" script_class="PassiveData" id="Resource_wingbeats"]
+script = ExtResource("2_pd")
+id = "wingbeats"
+display_name = "Wingbeats"
+kind = 0
+params = {
+"stack_hits": 5,
+"window": 2.0,
+"tiers": Array[Dictionary]([{
+"speed_mult": 1.05,
+"spread_mult": 0.9
+}, {
+"speed_mult": 1.1,
+"spread_mult": 0.8
+}])
+}
+
+[sub_resource type="Resource" script_class="AbilityData" id="Resource_glide"]
+script = ExtResource("3_ad")
+id = "glide_burst"
+display_name = "Glide Burst"
+kind = 0
+cooldown = 6.0
+is_ult = false
+params = {"count": 2, "distance": 3.0, "speed": 14.0}
+
+[sub_resource type="Resource" script_class="AbilityData" id="Resource_wingfire"]
+script = ExtResource("3_ad")
+id = "wingfire"
+display_name = "Wingfire"
+kind = 1
+cooldown = 9.0
+is_ult = false
+params = {"pellets": 4, "cone_deg": 18.0, "damage": 8.0, "slow_ratio": 0.25, "slow_duration": 3.0}
+
+[sub_resource type="Resource" script_class="AbilityData" id="Resource_dive"]
+script = ExtResource("3_ad")
+id = "kestrel_dive"
+display_name = "Kestrel Dive"
+kind = 2
+cooldown = 0.0
+is_ult = true
+params = {"duration": 5.0, "fire_rate_mult": 2.0, "speed_mult": 1.4, "damage_mult": 1.5, "spread_mult": 0.2}
+
+[resource]
+script = ExtResource("1_hd")
+id = "kestrel"
+display_name = "Kestrel"
+role = 0
+sub_role = 0
+color = Color(0.35, 0.62, 0.95, 1)
+max_hp = 120
+base_speed = 6.5
+jump_velocity = 5.8
+weapon = {
+"clip_size": 35,
+"damage": 11.0,
+"fire_rate": 11.0,
+"headshot_mult": 2.5,
+"max_range": 120.0,
+"reload_time": 1.6,
+"spread_deg": 0.4
+}
+passive = SubResource("Resource_wingbeats")
+abilities = Array[Resource]([SubResource("Resource_glide"), SubResource("Resource_wingfire")])
+ult = SubResource("Resource_dive")
+ult_max = 100.0
+charge_per_damage_dealt = 0.35
+charge_per_damage_taken = 0.1
+charge_per_kill = 15.0

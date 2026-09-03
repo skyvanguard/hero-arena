@@ -16,3 +16,9 @@ func _physics_process(_delta: float) -> void:
 		Controls.jump = true
 	if Input.is_action_just_pressed("reload"):
 		Controls.reload = true
+	if Input.is_action_just_pressed("ability1"):
+		Controls.ability1 = true
+	if Input.is_action_just_pressed("ability2"):
+		Controls.ability2 = true
+	if Input.is_action_just_pressed("ultimate"):
+		Controls.ultimate = true

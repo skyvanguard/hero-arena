@@ -4,6 +4,7 @@ extends Node
 ## scene tree runs in CI (ARCHITECTURE.md: gameplay/ must run headless).
 
 const FIXED_DT := 1.0 / 60.0
+const KESTREL: HeroData = preload("res://content/heroes/kestrel.tres")
 
 var world: World
 var player: Hero
@@ -19,11 +20,11 @@ func _ready() -> void:
 	var arena := Arena.build(world)
 	add_child(arena)
 
-	player = HeroFactory.create(0, true, Color(0.35, 0.7, 1.0))
+	player = HeroFactory.create(0, true, KESTREL.color, KESTREL)
 	add_child(player)
 	world.register_character(player)
 
-	bot = HeroFactory.create(1, false, Color(1.0, 0.4, 0.3))
+	bot = HeroFactory.create(1, false, KESTREL.color, KESTREL)
 	add_child(bot)
 	world.register_character(bot)
 

@@ -13,6 +13,7 @@ var _score_label: Label
 var _feed: VBoxContainer
 var _hitmark: Label
 var _flash_rect: ColorRect
+var _ult_bar: ProgressBar
 var _flash_t := 0.0
 var _hp := 100.0
 
@@ -39,6 +40,13 @@ func _build() -> void:
 	_hp_label.position = Vector2(24, vp.y - 92)
 	_hp_label.add_theme_font_size_override("font_size", 16)
 	root.add_child(_hp_label)
+
+	_ult_bar = ProgressBar.new()
+	_ult_bar.position = Vector2(24, vp.y - 78)
+	_ult_bar.size = Vector2(280, 8)
+	_ult_bar.max_value = 100.0
+	_ult_bar.show_percentage = false
+	root.add_child(_ult_bar)
 
 	_ammo_label = Label.new()
 	_ammo_label.position = Vector2(vp.x * 0.5 - 40, vp.y - 56)
@@ -122,6 +130,10 @@ func _add_feed_line(line: String) -> void:
 		_feed.get_child(0).queue_free()
 
 func _process(delta: float) -> void:
+	if player != null and player.ability != null:
+		_ult_bar.value = player.ability.charge
+		_ult_bar.modulate = Color(1.8, 1.5, 0.9) if player.ability.can_activate_ult() else Color.WHITE
+
 	if _hitmark.modulate.a > 0.0:
 		_hitmark.modulate.a = maxf(0.0, _hitmark.modulate.a - delta * 6.0)
 	if _flash_t > 0.0:

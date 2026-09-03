@@ -39,13 +39,13 @@
 
 ## 2. Phase 2 — First Hero
 
-- [ ] Original hero #1 (identity doc in GAME_DESIGN.md: role, sub-role, weapon, passive, ability 1, ability 2, ultimate, movement identity)
+- [x] Original hero #1 — KESTREL (identity doc in GAME_DESIGN.md; kit live in `content/heroes/kestrel.tres`)
 - [ ] Hero select screen (single hero + bot heroes)
-- [ ] Ability framework v1 (data-driven .tres definitions; cast/cooldown/charge)
-- [ ] Ultimate with combat-driven charge
+- [x] Ability framework v1 (data-driven .tres definitions; cast/cooldown/charge) — `content/heroes/*_data.gd`, `gameplay/hero/ability_component.gd`
+- [x] Ultimate with combat-driven charge (dmg dealt/taken + kills; HUD ult bar) — tested
 - [ ] Placeholder → original VFX + SFX for the hero's full kit (asset pipeline: naming, folders, LICENSE-ASSETS)
 - [ ] Animation set (idle/run/jump/shoot/ability/death — original or permissive)
-- [ ] Hero tests headless (cooldowns, charge math, ability effects)
+- [x] Hero tests headless (cooldowns, charge math, ability effects) — `tests/test_hero.gd`, 33/33 green
 
 **Exit criteria:** hero #1 is *a character* — you can understand them in seconds and feel the kit in minutes. No other hero needed yet (the framework proves out on one).
 
