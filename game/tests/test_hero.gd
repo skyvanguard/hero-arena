@@ -37,6 +37,8 @@ func _ready() -> void:
 	player.ability.ult_ready.connect(func() -> void: ult_ready_hits += 1)
 	await frames(10)
 	await _test_kit_data()
+	await _test_registry()
+	await _test_recoil()
 	await _test_dash()
 	await _test_cooldowns()
 	await _test_burst_slow()
@@ -86,6 +88,24 @@ func _test_kit_data() -> void:
 		player.weapon.fire_rate == 11.0 and player.weapon.clip_size == 35 and player.max_hp == 120.0,
 		"rate=%.0f clip=%d hp=%.0f" % [player.weapon.fire_rate, player.weapon.clip_size, player.max_hp])
 	check("kit: ability component attached", player.ability != null and target.ability != null)
+
+func _test_registry() -> void:
+	check("registry: at least one hero", HeroRegistry.count() >= 1)
+	var h: HeroData = HeroRegistry.default_hero()
+	check("registry: default hero has full kit",
+		h.abilities.size() == 2 and h.ult != null and h.passive != null)
+	check("registry: by_id resolves kestrel", HeroRegistry.by_id("kestrel") == h)
+	check("registry: unknown id -> null", HeroRegistry.by_id("nope") == null)
+
+func _test_recoil() -> void:
+	Controls.fire = true
+	await frames(5)
+	check("recoil: fires kick the gun", player._recoil > 0.0)
+	var gun: Node3D = player.get_node_or_null("Gun")
+	check("recoil: gun slid back", gun != null and gun.position.z < Hero.GUN_BASE_Z - 0.001)
+	Controls.fire = false
+	await frames(120)  # 2 s of decay
+	check("recoil: decays to base", gun != null and absf(gun.position.z - Hero.GUN_BASE_Z) < 0.001)
 
 func _test_dash() -> void:
 	_reset_positions()
