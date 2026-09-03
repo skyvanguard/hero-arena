@@ -40,12 +40,14 @@
 ## 2. Phase 2 — First Hero
 
 - [x] Original hero #1 — KESTREL (identity doc in GAME_DESIGN.md; kit live in `content/heroes/kestrel.tres`)
-- [ ] Hero select screen (single hero + bot heroes)
+- [x] Hero select screen (data-driven `HeroRegistry`; roster cards + DEPLOY, touch/Enter — verified on emulator)
+- [x] Data-driven hero registry (`content/heroes/registry.gd`) — adding a hero = one .tres + one line
 - [x] Ability framework v1 (data-driven .tres definitions; cast/cooldown/charge) — `content/heroes/*_data.gd`, `gameplay/hero/ability_component.gd`
 - [x] Ultimate with combat-driven charge (dmg dealt/taken + kills; HUD ult bar) — tested
-- [ ] Placeholder → original VFX + SFX for the hero's full kit (asset pipeline: naming, folders, LICENSE-ASSETS)
-- [ ] Animation set (idle/run/jump/shoot/ability/death — original or permissive)
-- [x] Hero tests headless (cooldowns, charge math, ability effects) — `tests/test_hero.gd`, 33/33 green
+- [x] Placeholder → original VFX + SFX for the hero's full kit — 9 synthesized original SFX (`tools/gen_sfx.gd`), kit VFX (dash/burst/ult aura), muzzle flash + gun recoil; pipeline docs in `docs/ASSET_PIPELINE.md` + `assets/LICENSE-ASSETS.md`
+- [x] Animation v1 (procedural cosmetics: recoil/flash/movement-driven VFX)
+- [ ] Skeletal animation set (idle/run/jump/shoot/ability/death — original, with Phase 3 models)
+- [x] Hero tests headless (kit, registry, recoil, cooldowns, charge math, ability effects) — `tests/test_hero.gd`, 40/40 green
 
 **Exit criteria:** hero #1 is *a character* — you can understand them in seconds and feel the kit in minutes. No other hero needed yet (the framework proves out on one).
 

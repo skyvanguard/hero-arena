@@ -28,6 +28,22 @@ proxy*, not a device measurement.
 Interpretation: the sim + rendering pipeline already clears the 30 FPS floor on
 CPU-only software rasterization → real Android GPUs have large headroom.
 
+### 2026-09-03 — headless Android emulator (Phase 2: hero select + SFX + VFX)
+
+Same AVD, but this instance rejects `wm size` override → guest display is
+**640x320 landscape** (lighter fill than the Phase 1 1280x720 surface).
+Scene = hero select → 1v1 match with Kestrel (full kit VFX/SFX wired).
+
+| Config | Result |
+|---|---|
+| gl_compatibility, SFX on | **24-33 FPS** steady after warmup; occasional ~0.1-1 s hitches (emulator housekeeping). |
+| gl_compatibility, SFX muted (vol -60 dB) | 29-33 FPS steady — audio mix cost ≈ 0-5 FPS. |
+| gl_compatibility, SFX not created | 36/33 FPS, then 22-24 FPS with a 1.06 s hitch — same band as Phase 1. |
+
+Interpretation: no render-side regression from Phase 2 features; the spread is
+emulator variance, not a feature cost. Real-device re-measure still pending
+(shipping renderer is `mobile`/Vulkan; the GL proxy above is pessimistic).
+
 ### Real device
 
 | Device | Date | Renderer | FPS (steady) | Worst frame | Notes |
