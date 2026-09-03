@@ -35,10 +35,10 @@ func _ready() -> void:
 		add_child(DesktopInput.new())
 		var tc := TouchControls.new()
 		add_child(tc)
-		var perf := Node.new()
+		var perf := PerfProbe.new()
 		perf.name = "PerfProbe"
 		add_child(perf)
-		PerfProbe.setup(perf, world)
+		perf.setup(world)
 		var hud := HUD.new()
 		add_child(hud)
 		hud.setup(world, player)

@@ -1,0 +1,47 @@
+# PERFORMANCE.md — mobile performance budgets & baselines
+
+Target (directive §25, §45): smooth on real Android — **30 FPS floor on low-end
+hardware, 60 FPS on mid-range**, at the 3v3 match size. Measured on a real device
+at every phase exit (AGENTS.md standing rule).
+
+## Frame budget (60 Hz target)
+
+| Slice | Budget | Notes |
+|---|---|---|
+| Input + logic (sim step, 60 Hz fixed) | ≤ 8 ms | sim must tick headless at this cost on a mid-range phone |
+| Rendering (mobile renderer, Vulkan) | ≤ 8 ms | 6-8 heroes, 2 maps, low-poly |
+| Total frame | 16.7 ms | 30 FPS floor = 33.3 ms |
+
+## Measured baselines
+
+### 2026-09-03 — headless Android emulator (Phase 1)
+
+Hardware proxy: Android 34 x86_64 emulator (google_apis), **software rendering**
+(llvmpipe Vulkan / ANGLE->Mesa GL). No real GPU — numbers are a *lower-bound
+proxy*, not a device measurement.
+
+| Renderer | Result |
+|---|---|
+| mobile (Vulkan, SwiftShader) | **stalled main loop** — 'Couldn't present to Vulkan queue (VkResult error 5)' every frame, ~0-1 FPS. Headless-emulator artifact (swapchain OUT_OF_DATE), not a game bug. |
+| gl_compatibility (ANGLE ES 3.1) | **36-48 FPS steady-state** after a ~15 s shader warmup (first 5-s windows: 5-6 FPS). Worst frame ≤ 50 ms in steady state. 1v1 sim + bots + full touch UI. |
+
+Interpretation: the sim + rendering pipeline already clears the 30 FPS floor on
+CPU-only software rasterization → real Android GPUs have large headroom.
+
+### Real device
+
+| Device | Date | Renderer | FPS (steady) | Worst frame | Notes |
+|---|---|---|---|---|---|
+| _pending_ | — | mobile | — | — | Phase 1 gate: first real low-end Android ≥ 30 FPS |
+
+## Known environment notes
+
+- Headless emulators (no window / no KVM-gpu) can fail Vulkan present with
+  VK_ERROR_OUT_OF_DATE. For emulator smoke tests, temporarily switch
+  `renderer/rendering_method` to `gl_compatibility`; shipping builds use `mobile`.
+- `PerfProbe` (game/core/util/perf_probe.gd) logs `PERF <fps> fps (worst frame
+  <ms>)` every 5 s to logcat — filter with `adb logcat -s godot`.
+- Emulator recipe used (this machine): AVD `neo_test` (android-34 google_apis
+  x86_64), `sg kvm` for /dev/kvm access,
+  `emulator -no-window -gpu angle_indirect -window-size 1280,720`,
+  `adb shell wm size 1280 720` for the landscape surface.

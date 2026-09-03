@@ -1,27 +1,23 @@
 class_name PerfProbe
-extends RefCounted
+extends Node
 ## FPS / frame-time logger for device perf notes (Phase 1 gate + PERFORMANCE.md).
-## Logs every 5 s of wall time: avg fps, worst frame, sim ms.
+## Logs every 5 s of wall time: avg fps, worst frame. Headless-safe no-op.
 
-static var _frames := 0
-static var _time := 0.0
-static var _worst := 0.0
-static var _last := 0.0
-static var _enabled := false
+var _frames := 0
+var _time := 0.0
+var _worst := 0.0
+var _last := -1
 
-static func setup(node: Node, _world: World) -> void:
+func setup(_world: World) -> void:
 	if DisplayServer.get_name() == "headless":
-		return
-	_enabled = true
-	_last = Time.get_ticks_msec()
-	node.process_frame.connect(_on_frame)
+		set_process(false)
 
-static func _on_frame() -> void:
-	if not _enabled:
+func _process(delta: float) -> void:
+	if _last < 0:
+		_last = Time.get_ticks_msec()
 		return
-	var now := Time.get_ticks_msec()
-	var dt := now - _last
-	_last = now
+	var dt := Time.get_ticks_msec() - _last
+	_last = Time.get_ticks_msec()
 	_frames += 1
 	_time += dt
 	_worst = maxf(_worst, dt)

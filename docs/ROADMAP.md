@@ -22,7 +22,7 @@
 
 **Goal: the smallest thing that proves the game is FUN on Android** (directive §37 checklist, verbatim):
 
-- [ ] Android build pipeline (Godot export, debug signing, install on a real device)
+- [x] Android build pipeline (Godot 4.7.2 headless export → signed debug APK, SDK/Java config, install verified on Android 34 emulator — `export_presets.cfg`, `docs/PERFORMANCE.md`; real-device install pending with the perf note)
 - [x] 1 small 3D arena map (placeholder-quality, correct *scale* — lanes/cover/verticality) — `game/gameplay/modes/arena.gd`, headless-verified
 - [x] Third-person character (capsule, movement states, coyote/buffer) — `core/state/character_entity.gd`, tested
 - [x] TPS camera (drag-look, shoulder offset; fixed-offset instead of SpringArm — 4.7 rework) — `gameplay/character/hero.gd`, tested

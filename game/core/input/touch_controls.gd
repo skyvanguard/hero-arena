@@ -35,7 +35,7 @@ func _build() -> void:
 	_aim_root.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_aim_root.offset_left = vp.x * 0.45
 	_aim_root.mouse_filter = Control.MOUSE_FILTER_STOP
-	_aim_root.input_event.connect(_on_aim_input)
+	_aim_root.gui_input.connect(_on_aim_input)
 	add_child(_aim_root)
 	# Joystick zone: left 45% (joystick appears where the finger lands).
 	_joy_root = Control.new()
@@ -43,14 +43,18 @@ func _build() -> void:
 	_joy_root.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_joy_root.offset_right = vp.x * 0.45
 	_joy_root.mouse_filter = Control.MOUSE_FILTER_STOP
-	_joy_root.input_event.connect(_on_joy_input)
+	_joy_root.gui_input.connect(_on_joy_input)
 	add_child(_joy_root)
 	# Buttons.
-	_fire_btn = _make_button("FIRE", Vector2(vp.x - 150.0, vp.y - 130.0), 64.0, Color(0.9, 0.35, 0.3, 0.55))
-	_make_button("JUMP", Vector2(vp.x - 150.0, vp.y - 240.0), BTN_R, Color(0.4, 0.8, 1.0, 0.45)).touched.connect(func() -> void: Controls.jump = true)
-	_make_button("RELOAD", Vector2(vp.x - 60.0, vp.y - 240.0), BTN_R, Color(1.0, 0.8, 0.3, 0.45)).touched.connect(func() -> void: Controls.reload = true)
+	_fire_btn = _make_button("FIRE", Vector2(vp.x - 150.0, vp.y - 130.0), 64.0,
+			Color(0.9, 0.35, 0.3, 0.55), func() -> void: pass)
+	_make_button("JUMP", Vector2(vp.x - 150.0, vp.y - 240.0), BTN_R,
+			Color(0.4, 0.8, 1.0, 0.45), func() -> void: Controls.jump = true)
+	_make_button("RELOAD", Vector2(vp.x - 60.0, vp.y - 240.0), BTN_R,
+			Color(1.0, 0.8, 0.3, 0.45), func() -> void: Controls.reload = true)
 
-func _make_button(label_text: String, pos: Vector2, radius: float, color: Color) -> Control:
+func _make_button(label_text: String, pos: Vector2, radius: float, color: Color,
+		on_touched: Callable) -> Control:
 	var c := Control.new()
 	c.name = "Btn_" + label_text
 	c.position = pos - Vector2(radius, radius)
@@ -60,9 +64,9 @@ func _make_button(label_text: String, pos: Vector2, radius: float, color: Color)
 	c.set_meta("color", color)
 	c.set_meta("radius", radius)
 	c.draw.connect(func() -> void: _draw_button(c))
-	c.input_event.connect(func(_ev_owner, event: InputEvent, _shp) -> void:
+	c.gui_input.connect(func(event: InputEvent) -> void:
 		if event is InputEventScreenTouch and event.pressed:
-			c.touched.emit()
+			on_touched.call()
 		if label_text == "FIRE" and event is InputEventScreenTouch:
 			Controls.fire = event.pressed
 	)
@@ -79,7 +83,7 @@ func _draw_button(c: Control) -> void:
 	c.draw_string(font, Vector2(r - ts.x * 0.5, r + ts.y * 0.35), lab,
 			HORIZONTAL_ALIGNMENT_LEFT, -1, r * 0.5, Color.WHITE)
 
-func _on_aim_input(_owner: Control, event: InputEvent, _shp) -> void:
+func _on_aim_input(event: InputEvent) -> void:
 	if event is InputEventScreenTouch:
 		var t := event as InputEventScreenTouch
 		if t.pressed:
@@ -95,7 +99,7 @@ func _on_aim_input(_owner: Control, event: InputEvent, _shp) -> void:
 		_aim_prev = drag.position
 		Controls.aim += d * AIM_SENS
 
-func _on_joy_input(_owner: Control, event: InputEvent, _shp) -> void:
+func _on_joy_input(event: InputEvent) -> void:
 	if event is InputEventScreenTouch:
 		var t := event as InputEventScreenTouch
 		if t.pressed and _joy_id == -1:

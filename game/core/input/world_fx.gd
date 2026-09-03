@@ -36,7 +36,8 @@ func _spawn_damage_number(data: Dictionary) -> void:
 	var t := 0.0
 	var tween := create_tween()
 	tween.tween_property(l, "position:y", pos.y + 0.9, 0.6)
-	tween.parallel().tween_property(l, "modulate:a", 0.0, 0.6)
+	tween.parallel().tween_property(l, "modulate",
+			Color(l.modulate.r, l.modulate.g, l.modulate.b, 0.0), 0.6)
 	tween.tween_callback(l.queue_free)
 	_labels.erase(l)
 
@@ -55,10 +56,12 @@ func _spawn_tracer(data: Dictionary) -> void:
 	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	bm.material = mat
 	mi.mesh = bm
+	add_child(mi)  # must be in-tree before look_at (4.7)
 	mi.position = (from + to) * 0.5
 	mi.look_at(to, Vector3.UP)
 	mi.scale.z = len
-	add_child(mi)
+	# 4.7: VisualInstance3D.modulate removed; MeshInstance3D uses `transparency` (0=opaque).
+	mi.transparency = 0.0
 	var tween := create_tween()
-	tween.tween_property(mi, "modulate:a", 0.0, 0.06)
+	tween.tween_property(mi, "transparency", 1.0, 0.06)
 	tween.tween_callback(mi.queue_free)
