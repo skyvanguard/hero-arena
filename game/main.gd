@@ -12,6 +12,10 @@ var practice: PracticeManager = null
 var _accum := 0.0
 var _hero_select: HeroSelect
 var _in_range := false
+## Everything _start_match/_start_range add to the tree, so the match can be
+## torn down cleanly when it ends (results overlay -> hero select).
+var _match_nodes: Array = []
+var _results: CanvasLayer = null
 
 func _ready() -> void:
 	randomize()
@@ -40,10 +44,15 @@ func _on_range(hero_data: HeroData) -> void:
 func _start_match(hero_data: HeroData) -> void:
 	world = World.new()
 	world.name = "World"
+	world.target_score = MatchConfig.target_score
+	world.match_duration = MatchConfig.match_duration
+	world.world_event.connect(_on_world_event)
 	add_child(world)
+	_match_nodes.append(world)
 
 	var arena := Arena.build(world)
 	add_child(arena)
+	_match_nodes.append(arena)
 
 	var size: int = clampi(MatchConfig.team_size, 1, 6)
 	var team0: Array = world.spawn_points.get(0, [])
@@ -54,6 +63,7 @@ func _start_match(hero_data: HeroData) -> void:
 	if team0.size() > 0:
 		player.position = team0[0]
 	add_child(player)
+	_match_nodes.append(player)
 	world.register_character(player)
 
 	# Bot roster: shuffle the six heroes so each match team varies.
@@ -86,6 +96,7 @@ func _spawn_bot(team: int, hero_data: HeroData, spawn: Vector3) -> void:
 	# Face across the map toward the enemy side.
 	b.rotation.y = PI if team == 0 else 0.0
 	add_child(b)
+	_match_nodes.append(b)
 	world.register_character(b)
 	var bc := BotController.new()
 	b.add_child(bc)
@@ -93,27 +104,128 @@ func _spawn_bot(team: int, hero_data: HeroData, spawn: Vector3) -> void:
 	bots.append(b)
 
 	if DisplayServer.get_name() != "headless":
-		add_child(DesktopInput.new())
+		var di := DesktopInput.new()
+		add_child(di)
+		_match_nodes.append(di)
 		var tc := TouchControls.new()
 		add_child(tc)
+		_match_nodes.append(tc)
 		var perf := PerfProbe.new()
 		perf.name = "PerfProbe"
 		add_child(perf)
+		_match_nodes.append(perf)
 		perf.setup(world)
 		if not bool(ProjectSettings.get_setting("debugperf/no_hud", false)):
 			var hud := HUD.new()
 			add_child(hud)
+			_match_nodes.append(hud)
 			hud.setup(world, player)
 		if not bool(ProjectSettings.get_setting("debugperf/no_fx", false)):
 			var fx := WorldFX.new()
 			add_child(fx)
+			_match_nodes.append(fx)
 			fx.setup(world)
 		if not bool(ProjectSettings.get_setting("debugperf/no_sfx", false)):
 			var sfx := Sfx.new()
 			add_child(sfx)
+			_match_nodes.append(sfx)
 			sfx.setup(world, player)
 			for p in sfx._players:
 				p.bus = "Master"
+
+func _on_world_event(name: String, data: Dictionary) -> void:
+	if name != "match_over" or _results != null:
+		return
+	var winner: int = int(data.winner)
+	var sc: Array = data.score
+	var wtime: float = float(data.time)
+	print("MATCH_OVER winner=%d score=%s t=%.0f s" % [winner, str(sc), wtime])
+	if DisplayServer.get_name() == "headless":
+		get_tree().quit(0)
+		return
+	_show_results(winner, sc, wtime)
+
+## TDM results overlay (VICTORY/DEFEAT/DRAW + final score + duration);
+## any tap returns to the hero select.
+func _show_results(winner: int, score: Array, wtime: float) -> void:
+	_results = CanvasLayer.new()
+	_results.layer = 100
+	add_child(_results)
+	# Hide the in-match touch layer while the overlay is up: its full-rect
+	# STOP zones swallow the dismiss tap (GUI routes the lower layer first).
+	for n in _match_nodes:
+		if n is TouchControls:
+			(n as TouchControls).visible = false
+	# The overlay's own background takes the touch: the in-match TouchControls
+	# stop full-rect layers would swallow the tap before _unhandled_input.
+	var bg := ColorRect.new()
+	bg.color = Color(0.02, 0.03, 0.06, 0.88)
+	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+	bg.mouse_filter = Control.MOUSE_FILTER_STOP
+	bg.gui_input.connect(func(ev: InputEvent) -> void:
+		# The GUI pipeline delivers the touch as a mouse press on the mobile
+		# backend (same pattern as the hero-select buttons) — accept both.
+		if (ev is InputEventScreenTouch and ev.pressed) or (ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT):
+			_exit_to_select()
+	)
+	_results.add_child(bg)
+	var vp := get_viewport().get_visible_rect().size
+	# Labels IGNORE mouse so taps fall through to bg (Label default is STOP,
+	# which would swallow the tap — see the hint label incident).
+	var title := Label.new()
+	title.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	title.text = "VICTORY" if winner == 0 else ("DEFEAT" if winner == 1 else "DRAW")
+	title.position = Vector2(vp.x * 0.5 - 160, vp.y * 0.28)
+	title.size = Vector2(320, 64)
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_size_override("font_size", 52)
+	title.modulate = Color(1.0, 0.85, 0.4) if winner == 0 else Color(1.0, 1.0, 1.0)
+	_results.add_child(title)
+	var sub := Label.new()
+	sub.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	sub.text = "%d  —  %d" % [int(score[0]), int(score[1])]
+	sub.position = Vector2(vp.x * 0.5 - 160, vp.y * 0.28 + 70)
+	sub.size = Vector2(320, 40)
+	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	sub.add_theme_font_size_override("font_size", 34)
+	_results.add_child(sub)
+	var hint := Label.new()
+	hint.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var mins := int(wtime) / 60
+	var secs := int(wtime) % 60
+	hint.text = "%d:%02d  ·  TAP TO CONTINUE" % [mins, secs]
+	hint.position = Vector2(vp.x * 0.5 - 160, vp.y * 0.28 + 130)
+	hint.size = Vector2(320, 30)
+	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	hint.add_theme_font_size_override("font_size", 20)
+	hint.modulate = Color(0.8, 0.85, 1.0)
+	_results.add_child(hint)
+
+func _unhandled_input(event: InputEvent) -> void:
+	if _results == null:
+		return
+	if (event is InputEventScreenTouch and event.pressed) or (event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT):
+		_exit_to_select()
+
+func _exit_to_select() -> void:
+	# Re-entry guard: the touch arrives as both a mouse press and a
+	# ScreenTouch, so this can fire twice per tap.
+	if _results == null:
+		return
+	if _results != null:
+		_results.queue_free()
+		_results = null
+	for n in _match_nodes:
+		if is_instance_valid(n):
+			n.queue_free()
+	_match_nodes = []
+	world = null
+	player = null
+	bots = []
+	_hero_select = HeroSelect.new()
+	add_child(_hero_select)
+	_hero_select.hero_deployed.connect(_on_deploy)
+	_hero_select.range_deployed.connect(_on_range)
 
 func _start_range(hero_data: HeroData) -> void:
 	_in_range = true

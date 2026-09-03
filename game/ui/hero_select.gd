@@ -224,7 +224,7 @@ func _make_difficulty_row(vp: Vector2) -> void:
 		c.mouse_filter = Control.MOUSE_FILTER_STOP
 		c.set_meta("diff_id", id)
 		c.set_meta("diff_short", short[id])
-		c.draw.connect(_draw_diff)
+		c.draw.connect(func() -> void: _draw_diff(c))
 		c.gui_input.connect(func(ev: InputEvent) -> void:
 			if (ev is InputEventScreenTouch and ev.pressed) or (ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT):
 				MatchConfig.set_difficulty(String(c.get_meta("diff_id")))
