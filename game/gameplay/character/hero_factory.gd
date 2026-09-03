@@ -147,6 +147,8 @@ static func create(team: int, is_player: bool, color: Color = Color.WHITE,
 	return h
 
 static func _apply_weapon_profile(weapon: Weapon, profile: Dictionary) -> void:
+	weapon.mode = str(profile.get("mode", "hitscan"))
+	weapon.pellets = int(profile.get("pellets", weapon.pellets))
 	weapon.damage = float(profile.get("damage", weapon.damage))
 	weapon.headshot_mult = float(profile.get("headshot_mult", weapon.headshot_mult))
 	weapon.fire_rate = float(profile.get("fire_rate", weapon.fire_rate))
@@ -154,4 +156,8 @@ static func _apply_weapon_profile(weapon: Weapon, profile: Dictionary) -> void:
 	weapon.reload_time = float(profile.get("reload_time", weapon.reload_time))
 	weapon.max_range = float(profile.get("max_range", weapon.max_range))
 	weapon.spread_deg = float(profile.get("spread_deg", weapon.spread_deg))
+	weapon.projectile_speed = float(profile.get("proj_speed", weapon.projectile_speed))
+	weapon.projectile_range = float(profile.get("proj_range", weapon.projectile_range))
+	weapon.projectile_slow_ratio = float(profile.get("proj_slow_ratio", 0.0))
+	weapon.projectile_slow_duration = float(profile.get("proj_slow_duration", 0.0))
 	weapon.ready()
