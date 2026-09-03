@@ -77,23 +77,27 @@ func step(world_: World, dt: float) -> void:
 func _execute_attack(dt: float) -> void:
 	var hp := hero.global_position
 	var known_pos := perception.last_known(decision.target)
+	# Move toward the flank goal (target + lateral spread for team-mates),
+	# aim at the enemy's actual known position.
+	var goal: Vector3 = decision.goal
 	hero.face_toward(known_pos)
-	var to_t := known_pos - hp
-	to_t.y = 0.0
-	var dist := to_t.length()
-	var dir := to_t / maxf(dist, 0.001)
+	var to_g := goal - hp
+	to_g.y = 0.0
+	var dist_g := to_g.length()
+	var dir_g := to_g / maxf(dist_g, 0.001)
 	var fwd := hero.global_transform.basis * CharacterEntity.FWD
 	strafe_t -= dt
 	if strafe_t <= 0.0:
 		strafe_dir = -strafe_dir
 		strafe_t = randf_range(params.strafe_min, params.strafe_max)
 	var desire := Vector3.ZERO
-	if dist > decision.fight_range + 3.0:
-		desire += dir
-	elif dist < decision.fight_range - 3.0:
-		desire -= dir * 0.6
+	if dist_g > decision.fight_range + 3.0:
+		desire += dir_g
+	elif dist_g < decision.fight_range - 3.0:
+		desire -= dir_g * 0.6
 	desire += (fwd.cross(Vector3.UP)) * strafe_dir * 0.9
 	_desire_move(desire.normalized())
+	var dist := known_pos.distance_to(hp)  # firing range check uses the real target
 	var fresh := perception.fresh(decision.target)
 	if fresh:
 		if _fresh_target != decision.target:

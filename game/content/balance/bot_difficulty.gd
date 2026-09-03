@@ -41,3 +41,9 @@ extends Resource
 @export var ability_quality := 0.5
 ## Regroup toward an ally below this HP fraction.
 @export var grouping_threshold := 0.55
+## Distance (m) from the nearest in-combat ally beyond which an idle bot
+## drifts back to the squad (stick/protect; bigger tiers hold tighter).
+@export var stick_range := 10.0
+## Meters of lateral spacing per team-mate sharing a target (flank spread:
+## stops a squad from stacking on one line of fire).
+@export var flank_spacing := 3.0

@@ -21,3 +21,5 @@ lost_sight_timeout = 0.6
 scan_speed = 1.8
 ability_quality = 1
 grouping_threshold = 0.65
+stick_range = 14.0
+flank_spacing = 3.0
