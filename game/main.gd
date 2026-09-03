@@ -4,15 +4,29 @@ extends Node
 ## scene tree runs in CI (ARCHITECTURE.md: gameplay/ must run headless).
 
 const FIXED_DT := 1.0 / 60.0
-const KESTREL: HeroData = preload("res://content/heroes/kestrel.tres")
 
 var world: World
 var player: Hero
 var bot: Hero
 var _accum := 0.0
+var _hero_select: HeroSelect
 
 func _ready() -> void:
 	randomize()
+	if DisplayServer.get_name() == "headless":
+		_start_match(HeroRegistry.default_hero())
+		return
+	_hero_select = HeroSelect.new()
+	add_child(_hero_select)
+	_hero_select.hero_deployed.connect(_on_deploy)
+
+func _on_deploy(hero_data: HeroData) -> void:
+	if _hero_select != null:
+		_hero_select.queue_free()
+		_hero_select = null
+	_start_match(hero_data)
+
+func _start_match(hero_data: HeroData) -> void:
 	world = World.new()
 	world.name = "World"
 	add_child(world)
@@ -20,11 +34,12 @@ func _ready() -> void:
 	var arena := Arena.build(world)
 	add_child(arena)
 
-	player = HeroFactory.create(0, true, KESTREL.color, KESTREL)
+	player = HeroFactory.create(0, true, hero_data.color, hero_data)
 	add_child(player)
 	world.register_character(player)
 
-	bot = HeroFactory.create(1, false, KESTREL.color, KESTREL)
+	var bot_hero: HeroData = HeroRegistry.default_hero()
+	bot = HeroFactory.create(1, false, bot_hero.color, bot_hero)
 	add_child(bot)
 	world.register_character(bot)
 
@@ -46,8 +61,15 @@ func _ready() -> void:
 		var fx := WorldFX.new()
 		add_child(fx)
 		fx.setup(world)
+		var sfx := Sfx.new()
+		add_child(sfx)
+		sfx.setup(world, player)
+		for p in sfx._players:
+			p.bus = "Master"
 
 func _physics_process(delta: float) -> void:
+	if world == null:
+		return
 	_accum += delta
 	var steps := 0
 	while _accum >= FIXED_DT and steps < 4:
