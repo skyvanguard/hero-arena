@@ -23,16 +23,16 @@
 **Goal: the smallest thing that proves the game is FUN on Android** (directive §37 checklist, verbatim):
 
 - [ ] Android build pipeline (Godot export, debug signing, install on a real device)
-- [ ] 1 small 3D arena map (placeholder-quality, correct *scale* — lanes/cover/verticality)
-- [ ] Third-person character (capsule, movement states, coyote/buffer)
-- [ ] TPS camera (drag-look, collision, shoulder offset)
-- [ ] Mobile touch controls (left move stick, right aim stick, fire, jump)
-- [ ] 1 weapon (hitscan, ammo, reload) — placeholder sound
-- [ ] Damage + health (HP bar, hit flash, damage numbers)
-- [ ] Death + respawn (5–8 s timer, spawn protection)
-- [ ] 1 enemy bot (seek + shoot with difficulty knobs)
-- [ ] Desktop KB/mouse binding of the same input contract (dev convenience)
-- [ ] Headless sim test harness + first gameplay tests (movement, hit, death)
+- [x] 1 small 3D arena map (placeholder-quality, correct *scale* — lanes/cover/verticality) — `game/gameplay/modes/arena.gd`, headless-verified
+- [x] Third-person character (capsule, movement states, coyote/buffer) — `core/state/character_entity.gd`, tested
+- [x] TPS camera (drag-look, shoulder offset; fixed-offset instead of SpringArm — 4.7 rework) — `gameplay/character/hero.gd`, tested
+- [x] Mobile touch controls (left move stick, right aim stick, fire, jump, reload) — `core/input/touch_controls.gd`; on-device check pending (line 36)
+- [x] 1 weapon (hitscan, ammo, reload, headshot mult) — `core/combat/weapon.gd`, tested (sound pending asset pipeline)
+- [x] Damage + health (HP bar, hit flash, damage numbers, regen-to-cap) — tested
+- [x] Death + respawn (6 s world-clock timer, 2 s protection) — `core/state/world.gd`, tested
+- [x] 1 enemy bot (search/engage/retreat, 4 difficulty param packs as data) — `gameplay/bots/bot_controller.gd`, tested
+- [x] Desktop KB/mouse binding of the same input contract (dev convenience) — `core/input/desktop_input.gd`
+- [x] Headless sim test harness + first gameplay tests (movement, hit, death, reload, bot) — `tests/test_main.gd`, 16/16 green
 - [ ] Real-device perf note: FPS on a low-end + mid-range Android phone, memory, thermals (PERFORMANCE.md baseline)
 
 **Exit criteria:** a person can install the APK, pick the character, run/shoot/kill the bot, die, respawn, on a real phone at ≥30 FPS. All in one 5-minute session. This is the go/no-go gate for the engine decision (D1 risk: if Godot misses the floor, revisit before Phase 2).
