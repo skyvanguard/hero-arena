@@ -61,3 +61,10 @@ emulator variance, not a feature cost. Real-device re-measure still pending
   x86_64), `sg kvm` for /dev/kvm access,
   `emulator -no-window -gpu angle_indirect -window-size 1280,720`,
   `adb shell wm size 1280 720` for the landscape surface.
+  **Note:** `wm size 1280 720` is *rejected* on this AVD ("bad size"); the
+  landscape surface settles at a **1440×720** Godot viewport (design 1280×720
+  centered, ~0.444 scale to the 640×320 capture). For `adb input tap` tests,
+  compute the tap from the *viewport* rect (printed by the HUD), not the
+  design coords: `screen = (viewport_x, viewport_y) * 0.4444`. Touch
+  emulates a mouse press (Godot default), so a tap also triggers the
+  `fire` mouse action — account for that when verifying button taps.

@@ -56,7 +56,7 @@
 - [x] Role/sub-role passive registry (data-only: HIT_STREAK / SPRINT / ARMOR in `content/heroes/passive_data.gd`; new kind = data + one match arm) — SPRINT/ARMOR live on Blitz/Bastion; FIELD/FLEX/ZONE with heroes #4-6
 - [x] Weapon framework v1 (hitscan w/ per-pellet spread + stepped projectile entities + headshot multipliers) — `core/combat/weapon.gd` (mode/pellets), `core/combat/projectile.gd`; heat/charge tables with heroes #4-6
 - [x] Heroes #2–#6 (2 Assault, 1 Tank, 2 Support/Utility, 1 Controller per directive §6) — each with distinct movement/combat identity. All 6 built & tested (Blitz/Bastion/Mira/Patch/Nimbus in Phase 3 rounds 3–4); identities in GAME_DESIGN.md
-- [ ] Practice range (hero testing, dummy targets, timer) — offline, no cloud
+- [x] Practice range (hero testing, dummy targets, timer) — offline, no cloud: `gameplay/practice/` (range builder + server-side manager), `ui/practice_hud.gd`, PRACTICE RANGE button on the select screen, 11-check headless suite (tests/test_practice.tscn) incl. the real player camera-aim path; emulator-verified end to end
 - [ ] Balance config system (content/balance/; headless balance test: DPS/TTK table per hero)
 - [x] Roster tests: per-hero kit validation + DPS/TTK balance table with role bands (`tests/test_roster.tscn`, **all 6 heroes green** incl. support heal/boost + controller zone checks). CC-lock + ult-charge pacing checks: tracked (CC budget = Bastion Quake Stomp + Nimbus Ion slow, both slow-only — no locks).
 

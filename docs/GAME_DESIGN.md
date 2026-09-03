@@ -205,3 +205,28 @@ Identities land here as each hero is built.
 | 4 | Mira | Support / Field | built + tested (heal/field pipeline) |
 | 5 | Patch | Support / Flex | built + tested (boosts + cooldown reduction) |
 | 6 | Nimbus | Controller / Zone | built + tested (projectile slow + ground zones) |
+
+## Practice range (offline target hall)
+
+**Purpose:** a fully-offline, no-cloud, no-bot range so any hero can be
+felt and tuned in isolation — the fun-with-zero-humans mandate made
+concrete. Entry is the PRACTICE RANGE button on the hero select (after
+picking the hero to test).
+
+**Layout:** a 24x40 m lane, no cover, three resettable targets at
+14/22/30 m (near/mid/long). Targets are real authoritative team-1
+characters (1000 HP sponges), so the exact damage pipeline (spread,
+projectiles, headshots, slow) is what gets exercised.
+
+**Loop:**
+- Damaged targets reset to full HP 2 s after the last hit (grace window),
+  so you can re-aim and re-engage without waiting for a respawn.
+- HUD: session timer, cumulative damage, per-target HP bars, RESET + BACK.
+- The camera pitch is set to center the nearest target so a first-timer
+  can shoot the range without re-aiming; mouse/touch drag still aims free.
+
+**Design notes**
+- Targets have no controller (server-side, no bot), so the range is a pure
+  sim + input sandbox: zero matchmaking, zero network, zero humans needed.
+- The range reuses the hero select, so testing a new hero only ever needs
+  a new .tres — the range is content-agnostic by construction (data-driven).
