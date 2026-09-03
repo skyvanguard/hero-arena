@@ -123,7 +123,7 @@ func _fire(world: World, dir: Vector3) -> void:
 		var to := origin + d * max_range
 		var q := PhysicsRayQueryParameters3D.create(origin, to,
 				CharacterEntity.LAYER_BODY | CharacterEntity.LAYER_HEAD)
-		q.exclude = [_owner.get_rid()]
+		q.exclude = _owner.own_rids()
 		var res := _owner.get_world_3d().get_direct_space_state().intersect_ray(q)
 		var end := to
 		var hit_ch: CharacterEntity = null
@@ -135,8 +135,7 @@ func _fire(world: World, dir: Vector3) -> void:
 				node = node.get_parent()
 			if node is CharacterEntity:
 				hit_ch = node
-				if res.collider is Area3D:
-					is_head = true
+				is_head = CharacterEntity.hit_is_head(res.collider)
 		if hit_ch != null and hit_ch != _owner:
 			var dmg := damage * damage_mult * (headshot_mult if is_head else 1.0)
 			world.damage(hit_ch, dmg, _owner, is_head, end)

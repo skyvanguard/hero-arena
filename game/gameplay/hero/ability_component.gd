@@ -168,7 +168,7 @@ func _burst_pellet(world: World, from: Vector3, d: Vector3, dmg: float, range_: 
 			node = node.get_parent()
 		if node is CharacterEntity:
 			hit_ch = node
-			is_head = res.collider is Area3D
+			is_head = CharacterEntity.hit_is_head(res.collider)
 	if hit_ch != null and hit_ch != owner_ref:
 		world.damage(hit_ch, dmg, owner_ref, is_head, end)
 		hit_ch.apply_slow(world, float(params.slow_ratio), float(params.slow_duration))

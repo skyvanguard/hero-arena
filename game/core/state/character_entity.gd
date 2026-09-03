@@ -9,6 +9,29 @@ const GRAVITY := 10.0
 const LAYER_WORLD := 1
 const LAYER_BODY := 2
 const LAYER_HEAD := 4
+
+## All of this character's own physics RIDs (body + head sensor). Required
+## because the head sensor is a nested StaticBody3D: excluding only the
+## body RID still lets rays self-hit the sensor (Phase 4 duel probe — the
+## bot's own LOS ray started inside its head and saw nothing).
+func own_rids() -> Array:
+	var rids: Array = [get_rid()]
+	var hs: Node = get_node_or_null("Head/HeadSensor")
+	if hs is PhysicsBody3D:
+		rids.append((hs as PhysicsBody3D).get_rid())
+	return rids
+
+## Headshot detection: walk up from the hit collider; a collider whose
+## ancestor chain contains the "HeadSensor" body marks a head hit. (The
+## sensor used to be an Area3D, which intersect_ray does not report in
+## 4.7 — headshots silently never registered; see hero_factory.)
+static func hit_is_head(collider: Object) -> bool:
+	var n: Node = collider as Node
+	while n != null:
+		if n.name == "HeadSensor":
+			return true
+		n = n.get_parent()
+	return false
 # Godot 4.7 flipped the forward axis: Vector3.FORWARD is now (0,0,-1).
 # Project convention: characters face their local +Z axis (see face_toward),
 # camera view direction is the local -Z axis (== Vector3.FORWARD in 4.7).
@@ -47,6 +70,8 @@ var _jump_buffered := false
 var _coyote := 0.0
 var _since_damage := 1e9
 var protected_until := 0.0
+## World-clock time of last death (HUD respawn countdown; set by world.kill).
+var death_time := 0.0
 var slow_ratio := 0.0     ## strongest active slow (0..1), decays via slow_until
 var slow_until := 0.0
 # Support-side boosts (data-driven): strongest active wins, like slow.
@@ -157,9 +182,14 @@ func _update_physics(world: World, dt: float) -> void:
 
 ## Direction the character aims its weapon/abilities at. Hero overrides with
 ## camera (player) or aim_target (bot) awareness. Base: local forward.
+## Aim FROM head height, not the capsule origin: the ray flies out of the
+## muzzle (~head height), so origin-based direction runs high over targets
+## (the Phase 4 bot-duel probe caught this: rays passed 1.3 m over heads).
+const AIM_HEIGHT := 1.25
+
 func aim_direction() -> Vector3:
 	if aim_target != Vector3.ZERO:
-		var d := aim_target - global_position
+		var d := aim_target - (global_position + Vector3.UP * AIM_HEIGHT)
 		if d.length_squared() > 0.001:
 			return d.normalized()
 	return (global_transform.basis * FWD).normalized()

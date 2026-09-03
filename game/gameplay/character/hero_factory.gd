@@ -16,6 +16,7 @@ static func create(team: int, is_player: bool, color: Color = Color.WHITE,
 	h.display_name = ("You" if is_player else "Bot") + " %d" % (team * 10 + randi() % 10)
 	h.is_player = is_player
 	if hero_data != null:
+		h.hero_data = hero_data
 		h.max_hp = hero_data.max_hp
 		h.base_speed = hero_data.base_speed
 		h.jump_velocity = hero_data.jump_velocity
@@ -68,12 +69,13 @@ static func create(team: int, is_player: bool, color: Color = Color.WHITE,
 	sphere.material = hmat
 	head_mesh.mesh = sphere
 	head.add_child(head_mesh)
-	var head_sensor := Area3D.new()
+	# StaticBody (not Area3D): in Godot 4.7, intersect_ray does not report
+	# Area3Ds here, so an Area sensor made the head completely unhittable
+	# (Phase 4 duel probe: rays passed through heads and hit the wall).
+	var head_sensor := StaticBody3D.new()
 	head_sensor.name = "HeadSensor"
 	head_sensor.collision_layer = CharacterEntity.LAYER_HEAD
 	head_sensor.collision_mask = 0
-	head_sensor.monitoring = false
-	head_sensor.monitorable = false
 	var head_shape := CollisionShape3D.new()
 	var hs := SphereShape3D.new()
 	hs.radius = 0.28

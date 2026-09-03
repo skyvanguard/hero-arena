@@ -75,7 +75,7 @@ func _resolve_hit(res: Dictionary, world: World) -> bool:
 	while node != null and not (node is CharacterEntity):
 		node = node.get_parent()
 	if node is CharacterEntity and node.team != team and node.alive:
-		var is_head := res.collider is Area3D
+		var is_head := CharacterEntity.hit_is_head(res.collider)
 		var dmg := damage * (headshot_mult if is_head else 1.0)
 		world.damage(node, dmg, shooter, is_head, res.position)
 		if shooter.ability != null:
