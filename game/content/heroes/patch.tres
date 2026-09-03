@@ -1,0 +1,69 @@
+[gd_resource type="Resource" script_class="HeroData" load_steps=6 format=3]
+
+[ext_resource type="Script" path="res://content/heroes/hero_data.gd" id="1_hd"]
+[ext_resource type="Script" path="res://content/heroes/passive_data.gd" id="2_pd"]
+[ext_resource type="Script" path="res://content/heroes/ability_data.gd" id="3_ad"]
+
+[sub_resource type="Resource" script_class="PassiveData" id="Resource_toolkit"]
+script = ExtResource("2_pd")
+id = "toolkit"
+display_name = "Toolkit"
+kind = 3
+params = {
+"cd_mult": 0.8
+}
+
+[sub_resource type="Resource" script_class="AbilityData" id="Resource_mule"]
+script = ExtResource("3_ad")
+id = "mule_shot"
+display_name = "Mule Shot"
+kind = 5
+cooldown = 10.0
+is_ult = false
+params = {"radius": 5.0, "duration": 2.5, "speed_boost": 0.4}
+
+[sub_resource type="Resource" script_class="AbilityData" id="Resource_resupply"]
+script = ExtResource("3_ad")
+id = "field_resupply"
+display_name = "Field Resupply"
+kind = 5
+cooldown = 11.0
+is_ult = false
+params = {"radius": 5.0, "duration": 0.2, "refill": true, "heal": 25.0}
+
+[sub_resource type="Resource" script_class="AbilityData" id="Resource_crew"]
+script = ExtResource("3_ad")
+id = "overdrive_crew"
+display_name = "Overdrive Crew"
+kind = 5
+cooldown = 0.0
+is_ult = true
+params = {"radius": 6.0, "duration": 6.0, "speed_boost": 0.3, "rate_boost": 0.3}
+
+[resource]
+script = ExtResource("1_hd")
+id = "patch"
+display_name = "Patch"
+role = 2
+sub_role = 3
+color = Color(0.55, 0.75, 0.3, 1)
+max_hp = 105
+base_speed = 6.2
+jump_velocity = 5.8
+weapon = {
+"clip_size": 30,
+"damage": 7.0,
+"fire_rate": 10.0,
+"headshot_mult": 2.0,
+"max_range": 80.0,
+"reload_time": 1.7,
+"spread_deg": 1.0
+}
+passive = SubResource("Resource_toolkit")
+abilities = Array[Resource]([SubResource("Resource_mule"), SubResource("Resource_resupply")])
+ult = SubResource("Resource_crew")
+ult_max = 100.0
+charge_per_damage_dealt = 0.28
+charge_per_damage_taken = 0.1
+charge_per_heal_dealt = 0.0
+charge_per_kill = 12.0

@@ -1,0 +1,70 @@
+[gd_resource type="Resource" script_class="HeroData" load_steps=6 format=3]
+
+[ext_resource type="Script" path="res://content/heroes/hero_data.gd" id="1_hd"]
+[ext_resource type="Script" path="res://content/heroes/passive_data.gd" id="2_pd"]
+[ext_resource type="Script" path="res://content/heroes/ability_data.gd" id="3_ad"]
+
+[sub_resource type="Resource" script_class="PassiveData" id="Resource_presence"]
+script = ExtResource("2_pd")
+id = "mending_presence"
+display_name = "Mending Presence"
+kind = 5
+params = {
+"radius": 7.0,
+"heal_per_s": 5.0
+}
+
+[sub_resource type="Resource" script_class="AbilityData" id="Resource_pulse"]
+script = ExtResource("3_ad")
+id = "healing_pulse"
+display_name = "Healing Pulse"
+kind = 3
+cooldown = 8.0
+is_ult = false
+params = {"radius": 8.0, "amount": 35.0}
+
+[sub_resource type="Resource" script_class="AbilityData" id="Resource_ward"]
+script = ExtResource("3_ad")
+id = "mending_ward"
+display_name = "Mending Ward"
+kind = 4
+cooldown = 12.0
+is_ult = false
+params = {"duration": 5.0, "radius": 6.0, "heal_per_s": 6.0, "speed_boost": 0.15}
+
+[sub_resource type="Resource" script_class="AbilityData" id="Resource_starfall"]
+script = ExtResource("3_ad")
+id = "starfall_mercy"
+display_name = "Starfall Mercy"
+kind = 4
+cooldown = 0.0
+is_ult = true
+params = {"duration": 6.0, "radius": 8.0, "heal_per_s": 12.0, "speed_boost": 0.1}
+
+[resource]
+script = ExtResource("1_hd")
+id = "mira"
+display_name = "Mira"
+role = 2
+sub_role = 4
+color = Color(0.25, 0.8, 0.7, 1)
+max_hp = 110
+base_speed = 6.0
+jump_velocity = 5.8
+weapon = {
+"clip_size": 30,
+"damage": 9.0,
+"fire_rate": 8.0,
+"headshot_mult": 2.0,
+"max_range": 100.0,
+"reload_time": 1.9,
+"spread_deg": 0.8
+}
+passive = SubResource("Resource_presence")
+abilities = Array[Resource]([SubResource("Resource_pulse"), SubResource("Resource_ward")])
+ult = SubResource("Resource_starfall")
+ult_max = 100.0
+charge_per_damage_dealt = 0.25
+charge_per_damage_taken = 0.1
+charge_per_heal_dealt = 0.15
+charge_per_kill = 10.0

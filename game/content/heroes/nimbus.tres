@@ -1,0 +1,75 @@
+[gd_resource type="Resource" script_class="HeroData" load_steps=6 format=3]
+
+[ext_resource type="Script" path="res://content/heroes/hero_data.gd" id="1_hd"]
+[ext_resource type="Script" path="res://content/heroes/passive_data.gd" id="2_pd"]
+[ext_resource type="Script" path="res://content/heroes/ability_data.gd" id="3_ad"]
+
+[sub_resource type="Resource" script_class="PassiveData" id="Resource_static"]
+script = ExtResource("2_pd")
+id = "static_charge"
+display_name = "Static Charge"
+kind = 4
+params = {
+"radius": 10.0,
+"rate_mult": 1.08
+}
+
+[sub_resource type="Resource" script_class="AbilityData" id="Resource_static_field"]
+script = ExtResource("3_ad")
+id = "static_field"
+display_name = "Static Field"
+kind = 6
+cooldown = 11.0
+is_ult = false
+params = {"distance": 12.0, "radius": 3.0, "duration": 4.0, "slow_ratio": 0.3}
+
+[sub_resource type="Resource" script_class="AbilityData" id="Resource_barrage"]
+script = ExtResource("3_ad")
+id = "ion_barrage"
+display_name = "Ion Barrage"
+kind = 1
+cooldown = 9.0
+is_ult = false
+params = {"pellets": 6, "cone_deg": 40.0, "damage": 8.0, "slow_ratio": 0.3, "slow_duration": 1.0, "projectile": true, "proj_speed": 18.0}
+
+[sub_resource type="Resource" script_class="AbilityData" id="Resource_storm"]
+script = ExtResource("3_ad")
+id = "ion_storm"
+display_name = "Ion Storm"
+kind = 2
+cooldown = 0.0
+is_ult = true
+params = {"duration": 6.0, "fire_rate_mult": 1.6, "speed_mult": 1.25, "damage_mult": 1.5, "spread_mult": 0.8}
+
+[resource]
+script = ExtResource("1_hd")
+id = "nimbus"
+display_name = "Nimbus"
+role = 3
+sub_role = 5
+color = Color(0.65, 0.45, 0.9, 1)
+max_hp = 100
+base_speed = 6.0
+jump_velocity = 5.8
+weapon = {
+"mode": "projectile",
+"clip_size": 24,
+"damage": 12.0,
+"fire_rate": 4.0,
+"headshot_mult": 1.5,
+"max_range": 50.0,
+"proj_range": 50.0,
+"proj_speed": 18.0,
+"proj_slow_ratio": 0.35,
+"proj_slow_duration": 1.5,
+"reload_time": 2.0,
+"spread_deg": 0.6
+}
+passive = SubResource("Resource_static")
+abilities = Array[Resource]([SubResource("Resource_static_field"), SubResource("Resource_barrage")])
+ult = SubResource("Resource_storm")
+ult_max = 100.0
+charge_per_damage_dealt = 0.3
+charge_per_damage_taken = 0.1
+charge_per_heal_dealt = 0.0
+charge_per_kill = 12.0

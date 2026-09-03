@@ -7,6 +7,9 @@ const HEROES: Array = [
 	preload("res://content/heroes/kestrel.tres"),
 	preload("res://content/heroes/blitz.tres"),
 	preload("res://content/heroes/bastion.tres"),
+	preload("res://content/heroes/mira.tres"),
+	preload("res://content/heroes/patch.tres"),
+	preload("res://content/heroes/nimbus.tres"),
 ]
 
 static func count() -> int:
