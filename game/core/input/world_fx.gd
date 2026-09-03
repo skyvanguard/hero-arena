@@ -26,6 +26,8 @@ func _on_world_event(name: String, data: Dictionary) -> void:
 			_spawn_tracer(data)
 		"ability_cast":
 			_spawn_ability_fx(data)
+		"dummy_reset":
+			_particle_burst(data.ch.global_position + Vector3.UP * 1.0, Color(0.4, 1.0, 0.6), 14, 3.0, 0.5)
 
 func _spawn_damage_number(data: Dictionary) -> void:
 	var pos: Vector3 = data.pos + Vector3(0.3, 0.4, 0) + Vector3(randf_range(-0.2, 0.2), 0, randf_range(-0.2, 0.2))

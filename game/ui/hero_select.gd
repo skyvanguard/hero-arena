@@ -4,8 +4,10 @@ extends CanvasLayer
 ## Emits hero_deployed(HeroData). Render-side only (skipped headless).
 
 signal hero_deployed(hero: HeroData)
+signal range_deployed(hero: HeroData)
 
 var _deploy_btn: Control
+var _practice_btn: Control
 var _hero: HeroData = null
 var _cards: Array = []
 
@@ -109,6 +111,7 @@ func _build() -> void:
 	add_child(hint)
 
 	_make_deploy(vp)
+	_make_practice(vp)
 
 func _draw_card(c: Control, hd: HeroData) -> void:
 	var selected := hd == _hero
@@ -152,6 +155,38 @@ func _make_deploy(vp: Vector2) -> Control:
 	)
 	add_child(c)
 	return c
+
+func _make_practice(vp: Vector2) -> Control:
+	var c := Control.new()
+	_practice_btn = c
+	c.position = Vector2(vp.x * 0.5 - 110.0, vp.y - 44.0)
+	c.size = Vector2(220, 30)
+	c.mouse_filter = Control.MOUSE_FILTER_STOP
+	c.draw.connect(_draw_practice)
+	c.gui_input.connect(func(event: InputEvent) -> void:
+		if event is InputEventScreenTouch and event.pressed:
+			_practice()
+		if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+			_practice()
+	)
+	add_child(c)
+	return c
+
+func _practice() -> void:
+	if _hero == null:
+		return
+	range_deployed.emit(_hero)
+
+func _draw_practice() -> void:
+	var c := _practice_btn
+	if c == null:
+		return
+	var r := Rect2(Vector2.ZERO, c.size)
+	c.draw_rect(r, Color(0.2, 0.32, 0.42, 0.9))
+	c.draw_rect(r.grow(-2.0), Color(0.35, 0.5, 0.62, 0.9), false, 1.5)
+	var f := ThemeDB.fallback_font
+	var sz := f.get_string_size("PRACTICE RANGE", HORIZONTAL_ALIGNMENT_CENTER, r.size.x, 16, 16)
+	c.draw_string(f, Vector2(r.position.x + (r.size.x - sz.x) * 0.5, r.position.y + r.size.y * 0.5 + sz.y * 0.35), "PRACTICE RANGE", HORIZONTAL_ALIGNMENT_LEFT, r.size.x, 16, Color(0.85, 0.9, 1.0))
 
 func _draw_deploy() -> void:
 	var c := _deploy_btn

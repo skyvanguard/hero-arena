@@ -96,6 +96,9 @@ func _sync_ability_mults() -> void:
 	else:
 		weapon.rate_boost_mult = rate_boost
 
+func set_aim_pitch(p: float) -> void:
+	_cam_pitch = p
+
 func aim_direction() -> Vector3:
 	if is_player:
 		return _camera_forward().normalized()
