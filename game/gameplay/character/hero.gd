@@ -96,6 +96,10 @@ func _sync_ability_mults() -> void:
 	else:
 		weapon.rate_boost_mult = rate_boost
 
+## Kit data (role/subrole/passives/abilities) — exposed for data-driven
+## consumers (bot role responsibilities, HUD, tests). Set by HeroFactory.
+var hero_data: HeroData = null
+
 func set_aim_pitch(p: float) -> void:
 	_cam_pitch = p
 

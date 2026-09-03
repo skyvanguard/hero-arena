@@ -10,6 +10,7 @@ var _deploy_btn: Control
 var _practice_btn: Control
 var _hero: HeroData = null
 var _cards: Array = []
+var _diff_btns: Array = []
 
 func _ready() -> void:
 	_hero = HeroRegistry.default_hero()
@@ -104,14 +105,15 @@ func _build() -> void:
 	var hint := Label.new()
 	hint.text = "TAP DEPLOY  (or ENTER)"
 	hint.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
-	hint.position.y = -150.0
+	hint.position.y = -8.0
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	hint.add_theme_font_size_override("font_size", 16)
+	hint.add_theme_font_size_override("font_size", 14)
 	hint.modulate = Color(0.6, 0.65, 0.75)
 	add_child(hint)
 
 	_make_deploy(vp)
 	_make_practice(vp)
+	_make_difficulty_row(vp)
 
 func _draw_card(c: Control, hd: HeroData) -> void:
 	var selected := hd == _hero
@@ -198,3 +200,47 @@ func _draw_deploy() -> void:
 	var f := ThemeDB.fallback_font
 	var sz := f.get_string_size("DEPLOY", HORIZONTAL_ALIGNMENT_CENTER, r.size.x, 26, 26)
 	c.draw_string(f, Vector2(r.position.x + (r.size.x - sz.x) * 0.5, r.position.y + r.size.y * 0.5 + sz.y * 0.35), "DEPLOY", HORIZONTAL_ALIGNMENT_LEFT, r.size.x, 26, Color.WHITE)
+
+## Bot difficulty picker (Phase 4): 4 tier buttons, writes MatchConfig.
+func _make_difficulty_row(vp: Vector2) -> void:
+	var lbl := Label.new()
+	lbl.text = "BOT DIFFICULTY"
+	lbl.position = Vector2(vp.x * 0.5, vp.y - 196.0)
+	lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	lbl.add_theme_font_size_override("font_size", 14)
+	lbl.modulate = Color(0.55, 0.6, 0.72)
+	add_child(lbl)
+	var ids: Array = BotDifficulties.ids()
+	var short := {"beginner": "BEG", "normal": "NORM", "advanced": "ADV", "expert": "EXPT"}
+	var w := 52.0
+	var gap := 4.0
+	var total := float(ids.size()) * w + float(ids.size() - 1) * gap
+	var x := vp.x * 0.5 - total * 0.5
+	for i in ids.size():
+		var id: String = ids[i]
+		var c := Control.new()
+		c.position = Vector2(x + i * (w + gap), vp.y - 176.0)
+		c.size = Vector2(w, 26)
+		c.mouse_filter = Control.MOUSE_FILTER_STOP
+		c.set_meta("diff_id", id)
+		c.set_meta("diff_short", short[id])
+		c.draw.connect(_draw_diff)
+		c.gui_input.connect(func(ev: InputEvent) -> void:
+			if (ev is InputEventScreenTouch and ev.pressed) or (ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT):
+				MatchConfig.set_difficulty(String(c.get_meta("diff_id")))
+				for b in _diff_btns:
+					b.queue_redraw()
+		)
+		add_child(c)
+		_diff_btns.append(c)
+
+func _draw_diff(c: Control) -> void:
+	var sel: bool = MatchConfig.difficulty == String(c.get_meta("diff_id"))
+	var r := Rect2(Vector2.ZERO, c.size)
+	var fill := Color(0.16, 0.19, 0.26, 1.0) if not sel else Color(0.35, 0.62, 1.0, 0.95)
+	c.draw_rect(r, fill)
+	c.draw_rect(r.grow(-1.5), Color(0.4, 0.85, 0.5, 1.0) if sel else Color(0.3, 0.36, 0.46, 1.0), false, 1.5)
+	var f := ThemeDB.fallback_font
+	var txt: String = String(c.get_meta("diff_short"))
+	var sz := f.get_string_size(txt, HORIZONTAL_ALIGNMENT_CENTER, r.size.x, 14, 14)
+	c.draw_string(f, Vector2(r.position.x + (r.size.x - sz.x) * 0.5, r.position.y + r.size.y * 0.5 + sz.y * 0.35), txt, HORIZONTAL_ALIGNMENT_LEFT, r.size.x, 14, Color(0.95, 0.97, 1.0))

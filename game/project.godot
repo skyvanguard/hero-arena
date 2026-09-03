@@ -12,6 +12,7 @@ config/features=PackedStringArray("4.7", "Mobile")
 [autoload]
 
 Controls="*res://core/input/controls.gd"
+MatchConfig="*res://core/match_config.gd"
 
 [display]
 
@@ -86,3 +87,12 @@ common/physics_ticks_per_second=60
 renderer/rendering_method="mobile"
 renderer/rendering_method.mobile="mobile"
 textures/vram_compression/import_etc2_astc=true
+
+[debugperf]
+
+no_fx=false
+no_sfx=false
+no_hud=false
+no_tracers=false
+no_labels=false
+no_particles=false

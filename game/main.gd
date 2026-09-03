@@ -7,7 +7,7 @@ const FIXED_DT := 1.0 / 60.0
 
 var world: World
 var player: Hero
-var bot: Hero
+var bots: Array = []
 var practice: PracticeManager = null
 var _accum := 0.0
 var _hero_select: HeroSelect
@@ -35,6 +35,8 @@ func _on_range(hero_data: HeroData) -> void:
 		_hero_select = null
 	_start_range(hero_data)
 
+## Offline match (directive §2 "zero humans"): player + bot fill on our side,
+## full bot team on the other. Team size from MatchConfig (config, not code).
 func _start_match(hero_data: HeroData) -> void:
 	world = World.new()
 	world.name = "World"
@@ -43,18 +45,52 @@ func _start_match(hero_data: HeroData) -> void:
 	var arena := Arena.build(world)
 	add_child(arena)
 
+	var size: int = clampi(MatchConfig.team_size, 1, 6)
+	var team0: Array = world.spawn_points.get(0, [])
+	var team1: Array = world.spawn_points.get(1, [])
+
+	# Player on our first spawn.
 	player = HeroFactory.create(0, true, hero_data.color, hero_data)
+	if team0.size() > 0:
+		player.position = team0[0]
 	add_child(player)
 	world.register_character(player)
 
-	var bot_hero: HeroData = HeroRegistry.default_hero()
-	bot = HeroFactory.create(1, false, bot_hero.color, bot_hero)
-	add_child(bot)
-	world.register_character(bot)
+	# Bot roster: shuffle the six heroes so each match team varies.
+	var roster: Array = HeroRegistry.HEROES.duplicate()
+	roster.shuffle()
+	var rix := 0
 
+	# Ally bots fill our remaining spawns (skip the player's hero for variety).
+	for i in range(1, size):
+		if team0.size() <= i:
+			break
+		var ally_data: HeroData = roster[rix % roster.size()]
+		rix += 1
+		if ally_data.id == hero_data.id and roster.size() > 1:
+			ally_data = roster[(rix) % roster.size()]
+			rix += 1
+		_spawn_bot(0, ally_data, team0[i])
+
+	# Enemy team: full bot squad on their spawns.
+	for i in size:
+		if team1.size() <= i:
+			break
+		var foe_data: HeroData = roster[rix % roster.size()]
+		rix += 1
+		_spawn_bot(1, foe_data, team1[i])
+
+func _spawn_bot(team: int, hero_data: HeroData, spawn: Vector3) -> void:
+	var b := HeroFactory.create(team, false, hero_data.color, hero_data)
+	b.position = spawn
+	# Face across the map toward the enemy side.
+	b.rotation.y = PI if team == 0 else 0.0
+	add_child(b)
+	world.register_character(b)
 	var bc := BotController.new()
-	bot.add_child(bc)
-	bc.setup(bot, player, world)
+	b.add_child(bc)
+	bc.setup(b, null, world, MatchConfig.difficulty)
+	bots.append(b)
 
 	if DisplayServer.get_name() != "headless":
 		add_child(DesktopInput.new())
@@ -64,17 +100,20 @@ func _start_match(hero_data: HeroData) -> void:
 		perf.name = "PerfProbe"
 		add_child(perf)
 		perf.setup(world)
-		var hud := HUD.new()
-		add_child(hud)
-		hud.setup(world, player)
-		var fx := WorldFX.new()
-		add_child(fx)
-		fx.setup(world)
-		var sfx := Sfx.new()
-		add_child(sfx)
-		sfx.setup(world, player)
-		for p in sfx._players:
-			p.bus = "Master"
+		if not bool(ProjectSettings.get_setting("debugperf/no_hud", false)):
+			var hud := HUD.new()
+			add_child(hud)
+			hud.setup(world, player)
+		if not bool(ProjectSettings.get_setting("debugperf/no_fx", false)):
+			var fx := WorldFX.new()
+			add_child(fx)
+			fx.setup(world)
+		if not bool(ProjectSettings.get_setting("debugperf/no_sfx", false)):
+			var sfx := Sfx.new()
+			add_child(sfx)
+			sfx.setup(world, player)
+			for p in sfx._players:
+				p.bus = "Master"
 
 func _start_range(hero_data: HeroData) -> void:
 	_in_range = true
@@ -118,14 +157,16 @@ func _start_range(hero_data: HeroData) -> void:
 		perf.name = "PerfProbe"
 		add_child(perf)
 		perf.setup(world)
-		var fx := WorldFX.new()
-		add_child(fx)
-		fx.setup(world)
-		var sfx := Sfx.new()
-		add_child(sfx)
-		sfx.setup(world, player)
-		for p in sfx._players:
-			p.bus = "Master"
+		if not bool(ProjectSettings.get_setting("debugperf/no_fx", false)):
+			var fx := WorldFX.new()
+			add_child(fx)
+			fx.setup(world)
+		if not bool(ProjectSettings.get_setting("debugperf/no_sfx", false)):
+			var sfx := Sfx.new()
+			add_child(sfx)
+			sfx.setup(world, player)
+			for p in sfx._players:
+				p.bus = "Master"
 		var hud := PracticeHUD.new()
 		add_child(hud)
 		hud.setup(practice, dummies)
