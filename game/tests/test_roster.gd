@@ -26,7 +26,7 @@ func _ready() -> void:
 	world = World.new()
 	add_child(world)
 	add_child(Arena.build(world))
-	check("roster: 3 heroes registered", HeroRegistry.count() == 3, "n=%d" % HeroRegistry.count())
+	check("roster: 6 heroes registered", HeroRegistry.count() == 6, "n=%d" % HeroRegistry.count())
 	for h in HeroRegistry.HEROES:
 		var hd: HeroData = h
 		await _validate_kit(hd)
@@ -80,7 +80,8 @@ func _validate_kit(hd: HeroData) -> void:
 	await _spawn(hd)
 	check("%s: kit complete (2 ab + ult + passive)" % hd.id,
 		hd.abilities.size() == 2 and hero.ability != null and hd.ult != null and hd.passive != null)
-	check("%s: ult is ult-flagged buff" % hd.id, hd.ult.is_ult and hd.ult.kind == AbilityData.Kind.BUFF)
+	check("%s: ult is ult-flagged" % hd.id,
+		hd.ult.is_ult and (hd.ult.kind == AbilityData.Kind.BUFF or hd.ult.kind == AbilityData.Kind.FIELD or hd.ult.kind == AbilityData.Kind.BOOST))
 	check("%s: weapon profile applied" % hd.id,
 		hero.weapon.fire_rate > 0.0 and hero.weapon.clip_size > 0 and absf(hero.weapon.damage - float(hd.weapon.get("damage", -1))) < 0.01,
 		"rate=%.1f clip=%d dmg=%.1f" % [hero.weapon.fire_rate, hero.weapon.clip_size, hero.weapon.damage])
@@ -92,6 +93,9 @@ func _passive_kind_ok(hd: HeroData) -> bool:
 		HeroData.SubRole.SUSTAINED: return hd.passive.kind == PassiveData.Kind.HIT_STREAK
 		HeroData.SubRole.SPRINT: return hd.passive.kind == PassiveData.Kind.SPRINT
 		HeroData.SubRole.ARMOR: return hd.passive.kind == PassiveData.Kind.ARMOR
+		HeroData.SubRole.FLEX: return hd.passive.kind == PassiveData.Kind.FLEX
+		HeroData.SubRole.FIELD: return hd.passive.kind == PassiveData.Kind.FIELD
+		HeroData.SubRole.ZONE: return hd.passive.kind == PassiveData.Kind.ZONE
 	return true
 
 func _measure_dps(hd: HeroData) -> void:
@@ -126,6 +130,12 @@ func _measure_dps(hd: HeroData) -> void:
 		HeroData.Role.TANK:
 			band_ok = dps > 1.0 and hero.max_hp >= 180.0
 			note = "tank dps>1, hp>=180"
+		HeroData.Role.SUPPORT:
+			band_ok = dps > 25.0
+			note = "support dps band >25 (secondary gun)"
+		HeroData.Role.CONTROLLER:
+			band_ok = dps > 15.0
+			note = "controller dps band >15"
 	dps_table[dps_table.size() - 1].note += " | " + note
 	check("%s: role band sanity" % hd.id, band_ok, "dps=%.1f hp=%.0f" % [dps, hero.max_hp])
 
@@ -149,6 +159,60 @@ func _check_passive_identities() -> void:
 	var kestrel: HeroData = HeroRegistry.by_id("kestrel")
 	await _spawn(kestrel)
 	check("kestrel: no flat mitigation", hero.ability.passive_damage_taken_mult() == 1.0)
+	# ---- Phase 3 support/controller framework checks ----
+	var patch: HeroData = HeroRegistry.by_id("patch")
+	await _spawn(patch)
+	check("patch: flex passive cuts cooldowns to 0.8", absf(hero.ability.passive_cd_mult() - 0.8) < 0.001,
+		"cd=%.2f" % hero.ability.passive_cd_mult())
+	var ally := await _spawn_ally()
+	check("patch: mule shot speed-boosts allies 0.4", hero.ability.cast(0) and absf(ally.speed_boost_ratio - 0.4) < 0.001,
+		"boost=%.2f" % ally.speed_boost_ratio)
+	var before := hero.weapon.ammo
+	hero.weapon.ammo = 3
+	check("patch: field resupply refills clip + heals", hero.ability.cast(1) and hero.weapon.ammo == hero.weapon.clip_size and ally.hp > 0,
+		"ammo=%d/%d" % [hero.weapon.ammo, hero.weapon.clip_size])
+	_free_ally()
+	var mira: HeroData = HeroRegistry.by_id("mira")
+	await _spawn(mira)
+	ally = await _spawn_ally()
+	ally.hp = 50.0
+	var h0 := ally.hp
+	await frames(60)  # 1 s of Mending Presence tick-heal
+	check("mira: field passive tick-heals allies (>=5/s)", ally.hp - h0 >= 4.9, "healed=%.1f" % (ally.hp - h0))
+	ally.hp = 50.0
+	check("mira: healing pulse heals ally 35", hero.ability.cast(0) and absf(ally.hp - minf(85.0, ally.max_hp)) < 0.01,
+		"hp=%.0f" % ally.hp)
+	_free_ally()
+	var nimbus: HeroData = HeroRegistry.by_id("nimbus")
+	await _spawn(nimbus)
+	await frames(10)
+	check("nimbus: zone passive rate bonus vs nearby enemy", absf(hero.ability.passive_rate_mult() - 1.08) < 0.001,
+		"rate=%.2f" % hero.ability.passive_rate_mult())
+	var zcount := world.zones.size()
+	check("nimbus: static field spawns slow zone", hero.ability.cast(0) and world.zones.size() == zcount + 1
+		and absf(world.zones[world.zones.size() - 1].slow_ratio - 0.3) < 0.001,
+		"zones=%d" % world.zones.size())
+
+var _ally: Hero = null
+
+func _spawn_ally() -> Hero:
+	_ally = HeroFactory.create(0, false, Color(0.9, 0.9, 0.9), hero.ability.hero_data)
+	_ally.position = hero.position + Vector3(0, 0, 3.0)  # inside 5-8 m radii
+	add_child(_ally)
+	world.register_character(_ally)
+	await frames(2)
+	return _ally
+
+func _free_ally() -> void:
+	if _ally != null and is_instance_valid(_ally):
+		world.unregister_character(_ally)
+		_ally.queue_free()
+	_ally = null
+
+func _free_zones() -> void:
+	for z in world.zones:
+		z._die()
+	world.zones = []
 
 class _TestController:
 	extends Node
