@@ -44,6 +44,50 @@ Interpretation: no render-side regression from Phase 2 features; the spread is
 emulator variance, not a feature cost. Real-device re-measure still pending
 (shipping renderer is `mobile`/Vulkan; the GL proxy above is pessimistic).
 
+### 2026-09-03 — headless Android emulator (Phase 4: offline 3v3 + bots)
+
+Same AVD, 1440×720 viewport (see environment notes). Scene = offline 3v3
+match (player + 2 ally bots vs 3 enemy bots, `normal` difficulty), GL
+compatibility renderer, all render subsystems on (WorldFX tracers/labels/
+particles, Sfx pool, HUD).
+
+**Memory (the Phase 4 bug):** the first 3v3 builds were OOM-killed in ~20 s of
+combat — RSS 3.2 GB, Scudo "exhausted 256M for size class N". Bisect
+(`debugperf/no_*` project settings, one subsystem per build):
+
+| Config (render subsystems) | 96 s result |
+|---|---|
+| all off (sim + 3D only) | **flat ~161 MB** |
+| WorldFX only (no HUD/Sfx) | **flat ~161 MB** |
+| Sfx only (no WorldFX/HUD) | **flat ~162 MB** |
+| HUD only, inert (no control writes) | **flat ~179 MB** |
+| HUD, flash writes only (0.05 alpha steps) | **flat ~179 MB** |
+| HUD, +HP writes (int precision) | **flat ~181 MB** |
+| HUD, +ult bar (0.5 steps) | **flat ~182 MB** |
+| HUD, +kill-feed Label create/free per kill | **2.6 GB by 30 s → OOM** |
+| HUD final (pooled feed, all write-on-change) | **flat ~188 MB, 0 script errors** |
+
+Root cause: on the GL compatibility renderer every 2D canvas invalidation
+(label `.text`, `ColorRect.color`, bar `.value`, new Label add/remove) churns
+the canvas texture pool; at per-frame rates the alloc/free cycle fragments
+Scudo's large-block pools and RSS grows without bound. The kill feed's
+per-kill Label create/free was the single biggest churn source.
+
+Fixes (in `core/input/hud.gd`, documented in its header): label text written
+only on change; damage flash written on 0.05 alpha steps; ult bar quantized to
+0.5; kill feed is a fixed pool of 6 labels overwritten round-robin. Headless
+sim RSS is ~112 MB flat over a 110 s 1v1 duel — the growth is render-side.
+
+| Metric | Result |
+|---|---|
+| PSS, full 3v3, 96 s | **~181-190 MB flat** (was: OOM at ~20-30 s) |
+| FPS (llvmpipe/ANGLE software GL) | 8-25 fps with 6 active bots + full FX — software-rasterizer proxy; 1v1/hero-select measured 24-48 fps in earlier phases. Real-device measure pending. |
+
+Interpretation: memory is now stable at 3v3 scale on the worst-case
+software rasterizer; the sim alone (headless) is flat at ~112 MB, so the
+dedicated-server 2-core budget has ample headroom (Phase 5). FPS on this AVD
+is not a device signal — see the real-device table below.
+
 ### Real device
 
 | Device | Date | Renderer | FPS (steady) | Worst frame | Notes |
@@ -57,6 +101,11 @@ emulator variance, not a feature cost. Real-device re-measure still pending
   `renderer/rendering_method` to `gl_compatibility`; shipping builds use `mobile`.
 - `PerfProbe` (game/core/util/perf_probe.gd) logs `PERF <fps> fps (worst frame
   <ms>)` every 5 s to logcat — filter with `adb logcat -s godot`.
+- Memory watch used for the Phase 4 bisect: `adb shell dumpsys meminfo
+  com.openhero.arena | grep "TOTAL PSS"` polled every 5-8 s during a match.
+- `debugperf/no_{fx,sfx,hud,tracers,labels,particles}` project settings (set in
+  `project.godot`, default false) switch render subsystems off one at a time —
+  keep for future memory bisects.
 - Emulator recipe used (this machine): AVD `neo_test` (android-34 google_apis
   x86_64), `sg kvm` for /dev/kvm access,
   `emulator -no-window -gpu angle_indirect -window-size 1280,720`,

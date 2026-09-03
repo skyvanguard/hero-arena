@@ -148,6 +148,40 @@ text:
 - **Bot difficulty also scales with population**: offline mode = full bot match; online queue fill = mixed, always labeled to the player (transparency, §17).
 - Evaluation harness: headless bot-vs-bot and bot-vs-player match runner producing stats (objective time, K/D, ability usage) for CI regression (directive §41).
 
+**As built (Phase 4, round 7):** `BotController` (gameplay/bots/) composes
+`BotPerception` + `BotDecision` as children and is added to the hero exactly
+like a human input source — `setup(hero, target, world, difficulty)` +
+`step(world, dt)`, driven inside `CharacterEntity.step` so bots need no
+external pulse. Perception: per-tick vision cone (FOV + range + LOS raycast
+against LAYER_WORLD|BODY|HEAD) plus hearing from the world `shot` event,
+keeping a `known` table (last position + time) pruned after ~8× the
+difficulty's `lost_sight_timeout`. Decision v1 is an intent ladder
+(RETREAT → ATTACK → INVESTIGATE → REGROUP → HOLD) with role multipliers
+(tank: closer + holds the line; support: regroups harder, fights at range)
+and a **retreat-confirmation window** (`retreat_confirm` seconds below
+`retreat_hp` before committing, re-engage at `retreat_hp + 0.15`) — without
+it, per-tick retreat at the threshold made bots mathematically unkillable by
+focused fire. Execution: strafe cadence + approach/hold at a role-biased
+fight range; aim error is an **angular** cone (direction rotated by a random
+deviation ≤ `aim_error_deg`, resampled at 5 Hz) aimed from head height
+(`CharacterEntity.AIM_HEIGHT`) — a fixed meter offset made accuracy
+independent of range; auto-reload (`start_reload()` when the clip is dry in
+combat, pre-load out of combat). Difficulty packs are `BotDifficulty`
+Resources in `content/balance/bots/` (reaction, aim_error_deg, ranges,
+strafe, vision/hearing, lost-sight timeout, scan speed, ability_quality,
+grouping threshold, retreat parameters) selected via `BotDifficulties.by_id`
+and exposed in the UI through the `MatchConfig` autoload (`difficulty`,
+`team_size`). Eval harness: `tests/test_bots.tscn` (13 checks incl. live 3v3
+"kills happen" and expert-out-K/Ds-beginner). Two core-system fixes came out
+of the bot eval: (1) the head hitbox is a **StaticBody3D** (`HeadSensor`)
+— Godot 4.7 `intersect_ray` does not report `Area3D`, so an Area head made
+heads unhittable and headshots silent; headshot detection walks the collider
+chain for `HeadSensor` (`CharacterEntity.hit_is_head`); (2) ray queries must
+exclude the *whole character* (`CharacterEntity.own_rids()` = body + head
+sensor) — a query started inside the shooter's own head sensor blocked all
+LOS. See PERFORMANCE.md for the HUD 2D-canvas memory rule (write-on-change +
+pooled kill feed) that 3v3 runs required.
+
 ### 3.7 Modes (gameplay/modes) — pluggable rules
 
 - IMode interface: on_match_start / on_tick / on_event / win_condition / scoring / respawn_policy / spawn_logic.
