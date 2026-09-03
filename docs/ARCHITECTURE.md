@@ -223,6 +223,7 @@ otherwise swallow it.
 - **Client prediction** for local movement + fire rate; **reconciliation** on snapshot arrival; **interpolation** (~100 ms buffer) for remote entities; **lag compensation** (server rewinds 100–200 ms for hitscan validation); **hit validation** with per-player tolerance (aim-assist-eligible windows).
 - **Reconnect**: session token + state resync (full snapshot + recent events).
 - **Matchmaking** (lobby service): party-aware queue (directive §15/§16) — strict skill+latency → widen skill → widen region → **bot fill at 60 s+** (configurable thresholds); displays Region/Ping/Server/skill band/party composition on match found (§17).
+- **As-built v1 (round 9, detail in NETWORKING.md):** transport = ENetMultiplayerPeer driven through Godot 4.7 \`SceneMultiplayer\` (a RefCounted MultiplayerAPI — not a Node; requires \`set_root_path\` + manual \`poll()\`); own wire codec (magic-byte dispatch, LE, f32 bit codec); humans are server-side \`NetPlayerController\` instances (controller parity with bots, D3); client views are physics-invisible (shared physics space in loopback). Prediction/reconciliation, lag compensation, reconnect tokens, LAN discovery: later Phase 5 rounds.
 - **Regions**: initial SA/NA/EU/AS with LATAM priority (directive §18); regions.yaml + latency table in server ops; client shows per-server ping.
 
 ### 3.11 Offline & Community (directive §19/§20)
@@ -259,6 +260,7 @@ otherwise swallow it.
 | D8 | Combat-driven ult charge (T3/OW) | Rewards play, no idle charging, consistent across modes | Time-based (T3's mode-specific ult complaint) |
 | D9 | One map per phase-pair, 2 maps at Phase 6 | Compact, readable, mobile-scale | Big maps (T3's maps were right-sized; OW-scale too big for 3v3 mobile) |
 | D10 | Local-first accounts, optional cloud | Offline-first mandate; no cloud dependency for core play | Account-gated (loses §19) |
+| D11 | Net v1 (round 9): ENet via Godot 4.7 SceneMultiplayer; 60 Hz server, 20 Hz snapshots (unreliable) + reliable events, 100 ms interpolation, **no client prediction / no lag comp / no reconnect** in v1 | Ship the authoritative loop + LAN direct connect first (LAN-first mandate §21); prediction/lag-comp multiply validation complexity; 100 ms feel delay is the accepted v1 cost | Prediction from day one (feel now, complexity now); 30 Hz snapshots (bandwidth for feel) |
 
 ## 5. Test Strategy (overview — directive §41)
 

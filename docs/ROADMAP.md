@@ -80,17 +80,19 @@
 
 ## 5. Phase 5 — Multiplayer
 
-- [ ] Dedicated headless match server (same codebase; 60 Hz fixed step; session tokens)
-- [ ] Net layer v1: snapshots (20–30 Hz), events (reliable), interpolation, client prediction + reconciliation, lag compensation for hitscan (100–200 ms window)
+- [x] Dedicated headless match server (same codebase; 60 Hz fixed step) — net/server.tscn headless, --port=N, bot pre-fill; session tokens with the reconnect round
+- [~] Net layer v1: **shipped (round 9): 20 Hz snapshots (unreliable) + reliable events + 100 ms interpolation + own wire codec** (docs/NETWORKING.md); client prediction + reconciliation + lag compensation (100–200 ms window) = next net round
 - [ ] Reconnect (drop/resume mid-match)
 - [ ] Server-authority property tests (client lies rejected: damage, ammo, cooldown, movement)
 - [ ] Net-sim harness: latency (50/150/300 ms) + packet loss (2/10%) profiles
-- [ ] **LAN play first** (local discovery, direct connect) per directive §21
+- [~] **LAN play first** per directive §21 — **direct connect shipped** (host:port field in hero-select, emulator-verified join); local discovery (mDNS/broadcast) = later round
 - [ ] Internet play (region table, ping display, Region/Ping/Server in UI)
 - [ ] Matchmaking prototype: party-aware queue with the 4-stage strategy (strict → widen skill → widen region → bot fill) + match-found transparency panel (directive §16/§17)
 - [ ] Server ops: docker image, 2-core budget measurement (PERFORMANCE.md)
 
 **Exit criteria:** two phones on the same LAN play 3v3 with bots filling; then over the internet with bot fill at 60 s; drops/reconnects survive; property tests green.
+
+**Status: IN PROGRESS (round 9).** Net v1 foundation shipped: ENet transport via Godot 4.7 SceneMultiplayer (RefCounted API: set_root_path + manual poll — NETWORKING.md §1), dedicated headless server scene, own wire codec (hello/slot/input/snapshot/events, 20 Hz both ways), NetPlayerController (humans = server-side controllers, same interface as bots), LAN direct-connect UI, client view interpolation with physics-invisible views, and a 10-check in-process loopback suite — **169/169 headless checks green** (159 prior + 10 net). Two subtle bugs found by the loopback suite and fixed: (1) client views shared the process physics space and blocked the bots’ LOS rays / pushed server characters (views now physics-invisible); (2) team-full check counted bots instead of humans (team pick now by human count). Remaining for exit: prediction + reconciliation + lag comp, reconnect (session tokens), LAN discovery, net-sim harness + server-authority property tests, internet play + matchmaking prototype, docker server ops.
 
 ## 6. Phase 6 — First Complete Match (FIRST MAJOR MILESTONE)
 
