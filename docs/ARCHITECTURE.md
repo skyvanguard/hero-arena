@@ -182,6 +182,19 @@ sensor) — a query started inside the shooter's own head sensor blocked all
 LOS. See PERFORMANCE.md for the HUD 2D-canvas memory rule (write-on-change +
 pooled kill feed) that 3v3 runs required.
 
+Team behaviors v1 (round 8): **flank spread** (bots sharing a target offset
+their ATTACK goal laterally by `flank_spacing` × rank, rank = distance to
+target, so a squad doesn't stack on one line of fire) and **stick/protect**
+(an idle bot more than `stick_range` from an in-combat ally — attacking, or
+took damage < 2 s — REGROUPs toward it). Both are data-driven (difficulty
+pack) and headless. TDM **match end** lives in the authoritative `World`
+(first of: a team reaching `target_score`, or the `match_duration` clock;
+`match_over` emitted once, sim freezes after) with pacing values in
+`MatchConfig` (directive §6: 3–8 min matches). The client renders a results
+overlay (VICTORY/DEFEAT/DRAW + score + duration) whose own background takes
+the dismiss tap — the in-match touch layer's STOP full-rect zones would
+otherwise swallow it.
+
 ### 3.7 Modes (gameplay/modes) — pluggable rules
 
 - IMode interface: on_match_start / on_tick / on_event / win_condition / scoring / respawn_policy / spawn_logic.

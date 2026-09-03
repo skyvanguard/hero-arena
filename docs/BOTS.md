@@ -34,6 +34,8 @@ ability casts) — human/bot parity is guaranteed by construction (D3).
 | scan_speed | rad/s while HOLD-scanning | 0.6 … 1.8 |
 | ability_quality | probability gate for ability timing | 0.35 … 1.0 |
 | grouping_threshold | ally hp fraction that triggers REGROUP | 0.5 … 0.65 |
+| stick_range | m from an in-combat ally before an idle bot drifts back (stick) | 8 … 14 |
+| flank_spacing | m of lateral offset per team-mate sharing a target (flank) | 3 (all tiers) |
 
 Tiers must stay strictly ordered (enforced by `tests/test_bots.tscn`):
 better tiers see more, react faster, and aim truer.
@@ -56,6 +58,19 @@ better tiers see more, react faster, and aim truer.
 - Retreat needs `retreat_confirm` seconds below `retreat_hp` and re-engages
   at `retreat_hp + 0.15` (hysteresis). Removing either makes bots unkillable
   or suicidal.
+- **Flank spread**: when several team-mates target the same enemy, each bot's
+  ATTACK goal is offset laterally by `flank_spacing` × its rank (nearest
+  bot keeps the center slot). This stops a squad from stacking on one line of
+  fire. Rank is by distance to the target, so it is stateless and stable.
+- **Stick/protect**: an idle bot (no fresh target, nothing heard) that is more
+  than `stick_range` from an *in-combat* ally (attacking, or took damage < 2 s
+  ago) REGROUPs toward it. This keeps the squad from drifting apart between
+  fights. The in-combat check reads the ally's own decision/damage state, so
+  it needs no extra data.
+- Team behaviors are **partial** for Phase 4: regroup + retreat + shot callouts
+  (hearing) + flank + stick are in; flank-pathing, protect-from-behind, and
+  revive rules arrive with the Phase 6 mode objectives (revive needs a
+  downed-state, which TDM doesn't have).
 
 ## Memory (render side)
 
@@ -63,6 +78,17 @@ HUD 2D canvas writes must be write-on-change / coarse-step, and the kill
 feed uses a fixed label pool — see the header of `core/input/hud.gd` and
 the Phase 4 section of PERFORMANCE.md (per-frame canvas writes OOM'd a 3v3
 in ~20 s on the GL emulator).
+
+## Match end (TDM)
+
+A TDM match ends on the first of: a team reaching `MatchConfig.target_score`
+(15), or the `MatchConfig.match_duration` (300 s) timer expiring — whichever
+first (higher score wins the timeout; equal = draw). The authoritative `World`
+checks this each tick and emits `match_over` once. The client shows a results
+overlay (VICTORY / DEFEAT / DRAW + final score + duration); any tap returns to
+the hero select. These values live in `MatchConfig` (data, not code) so modes
+and team sizes can retune pacing without touching the sim. Pacing target:
+directive §6 — matches run 3–8 minutes (15-kill cap or 5:00 clock).
 
 ## Testing
 
