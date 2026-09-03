@@ -111,6 +111,87 @@ charge instead of double dash. Positioning is deliberate.
   lock (CC-lock budget tracked in the balance harness).
 - Kill charge is the highest on the roster (+20): tanks trade less
   damage, so kills are their main charge engine.
+## Hero #4 — MIRA (Support / Field)
+
+**Role:** Support. **Sub-role:** Field (healing presence; the team's
+heartbeat rather than a burst button).
+
+**Identity in one line:** the heartbeat — you stand with the fight and the
+team simply does not stay down; your damage is the price of that presence,
+and healing is also how you fuel your own ult.
+
+**Movement identity:** average speed (6.0), no mobility kit — positioning
+is "stay near allies, slightly off the line". The field IS her kit.
+
+| Slot | Name | Behavior | Data (mira.tres) |
+|---|---|---|---|
+| Weapon | Lance | 9 dmg / 8 rps / clip 30 / 0.8 deg — reliable secondary rifle | hitscan |
+| Passive | Mending Presence | constant 5 HP/s tick-heal to allies within 7 m (always on) | radius=7, heal_per_s=5 |
+| Ability 1 (Q) | Healing Pulse | instant 35 HP to self + allies within 8 m | radius=8, amount=35, CD 8 s |
+| Ability 2 (E) | Mending Ward | 5 s field: 6 HP/s + 15% speed to allies within 6 m | CD 12 s |
+| Ultimate (F) | Starfall Mercy | 6 s field: 12 HP/s + 10% speed to allies within 8 m | charge: 0.25/dealt, 0.10/taken, 0.15/heal, +10/kill |
+
+**Design notes**
+- Healing is the charge engine (charge_per_heal_dealt 0.15): a support who
+  peels for the team lands her ult — support time is not dead time.
+- Presence heal is a world-tick (60 Hz sim) with a per-tick cap; the heal
+  HUD only labels heals >= 1 to avoid number spam.
+- Mira's TTK is worse than the assaults by design (71 dps harness); her
+  value is the 5-12 HP/s that changes every other hero's survivability.
+## Hero #5 — PATCH (Support / Flex)
+
+**Role:** Support. **Sub-role:** Flex (cooldown reduction + utility;
+the hero who makes every cooldown tick faster).
+
+**Identity in one line:** the wrench — nothing you carry is the star,
+everything you carry comes back sooner; you are the tempo of the squad.
+
+**Movement identity:** slightly above-average speed (6.2); Mule Shot gives
+the whole squad a short speed pill — mobility as a service.
+
+| Slot | Name | Behavior | Data (patch.tres) |
+|---|---|---|---|
+| Weapon | Sidekick | 7 dmg / 10 rps / clip 30 / 1.0 deg — fast SMG | hitscan |
+| Passive | Toolkit | all ability cooldowns x0.8 (the flex identity) | cd_mult=0.8 |
+| Ability 1 (Q) | Mule Shot | +40% speed to self + allies within 5 m for 2.5 s | CD 10 s |
+| Ability 2 (E) | Field Resupply | instant full clip + 25 HP to allies within 5 m | CD 11 s |
+| Ultimate (F) | Overdrive Crew | 6 s: +30% speed AND +30% fire rate to allies within 6 m | charge: 0.28/dealt, 0.10/taken, +12/kill |
+
+**Design notes**
+- FLEX passive is a global cooldown multiplier (data-only): it shortens
+  Q/E/ult pacing, not movement — the "everything ticks faster" fantasy.
+- Resupply is the emergency button: refill + heal in one press, the
+  support answer to an empty clip at the worst moment.
+- 66.5 dps in the harness — the best "secondary gun" of the two supports,
+  trading raw healing for tempo (Patch is the aggressive support).
+
+## Hero #6 — NIMBUS (Controller / Zone)
+
+**Role:** Controller. **Sub-role:** Zone (area denial; the enemy's
+footing is his problem).
+
+**Identity in one line:** the weather — you do not out-aim the enemy, you
+change the ground under their feet; slow fields, ion bolts, and a storm
+that makes the whole team's guns ring faster.
+
+**Movement identity:** average speed (6.0); the Ion Carbine is a slow,
+heavy bolt — range and setup over reaction.
+
+| Slot | Name | Behavior | Data (nimbus.tres) |
+|---|---|---|---|
+| Weapon | Ion Carbine | 12 dmg bolt, 4 rps, clip 24, projectile 18 m/s / 50 m, 35% slow 1.5 s | mode=projectile |
+| Passive | Static Charge | +8% fire rate while an enemy is within 10 m | radius=10, rate_mult=1.08 |
+| Ability 1 (Q) | Static Field | 3 m slow zone (30% slow) at 12 m, lasts 4 s | CD 11 s |
+| Ability 2 (E) | Ion Barrage | 6-bolt 40 deg cone, 8 dmg each + 30% slow 1 s | CD 9 s |
+| Ultimate (F) | Ion Storm | 6 s: 1.6x fire rate, 1.5x damage, 1.25x speed, 0.8x spread | charge: 0.30/dealt, 0.10/taken, +12/kill |
+
+**Design notes**
+- The only pure Controller: his kit is slow + field + a damage spike, not
+  healing. He denies ground (Static Field) and punishes positioning.
+- Static Charge passive is the zone identity: the closer the fight, the
+  faster he shoots — rewarding holding the corner of a lane.
+- 48 dps harness; his TTK is slow (2.08 s) — the controller does not win
+  the 1v1 TTK race, he wins the fight by making the enemy sluggish.
 ## Roster plan (Phase 3 fills #2–#6)
 
 2 Assault, 1 Tank, 2 Support/Utility, 1 Controller (directive §6).
@@ -121,6 +202,6 @@ Identities land here as each hero is built.
 | 1 | Kestrel | Assault / Sustained | built + tested |
 | 2 | Blitz | Assault / Sprint | built + tested (projectile weapon) |
 | 3 | Bastion | Tank / Armor | built + tested (pellet shotgun, mitigation) |
-| 4 | Mira | Support / Field | pending |
-| 5 | Patch | Support / Flex | pending |
-| 6 | Nimbus | Controller / Zone | pending |
+| 4 | Mira | Support / Field | built + tested (heal/field pipeline) |
+| 5 | Patch | Support / Flex | built + tested (boosts + cooldown reduction) |
+| 6 | Nimbus | Controller / Zone | built + tested (projectile slow + ground zones) |

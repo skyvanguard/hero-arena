@@ -47,14 +47,16 @@ func _build() -> void:
 	add_child(title)
 
 	# Roster cards (one per registry hero; 6 slots arrive with Phase 3).
-	var total_w := float(HeroRegistry.HEROES.size()) * 220.0
-	var cards_x := vp.x * 0.5 - total_w * 0.5
+	var n := HeroRegistry.HEROES.size()
+	var spacing := minf(220.0, (vp.x - 40.0) / float(n))  # 6-card roster must fit
+	var card_w := spacing - 24.0
+	var cards_x := vp.x * 0.5 - float(n) * spacing * 0.5
 	var i := 0
 	for h in HeroRegistry.HEROES:
 		var hd: HeroData = h
 		var card := Control.new()
-		card.position = Vector2(cards_x + i * 220.0, vp.y * 0.5 - 140.0)
-		card.size = Vector2(200, 280)
+		card.position = Vector2(cards_x + i * spacing, vp.y * 0.5 - 140.0)
+		card.size = Vector2(card_w, 280)
 		card.mouse_filter = Control.MOUSE_FILTER_STOP
 		var data := hd
 		card.draw.connect(func() -> void: _draw_card(card, data))
@@ -67,22 +69,22 @@ func _build() -> void:
 
 		var ic := ColorRect.new()
 		ic.color = hd.color
-		ic.position = Vector2(40, 20)
+		ic.position = Vector2((card_w - 120.0) * 0.5, 20)
 		ic.size = Vector2(120, 90)
 		card.add_child(ic)
 
 		var nm := Label.new()
 		nm.text = hd.display_name
-		nm.position = Vector2(10, 120)
-		nm.size = Vector2(180, 30)
+		nm.position = Vector2(4, 120)
+		nm.size = Vector2(card_w - 8.0, 30)
 		nm.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		nm.add_theme_font_size_override("font_size", 24)
 		card.add_child(nm)
 
 		var role := Label.new()
 		role.text = _role_text(hd)
-		role.position = Vector2(10, 152)
-		role.size = Vector2(180, 20)
+		role.position = Vector2(4, 152)
+		role.size = Vector2(card_w - 8.0, 20)
 		role.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		role.add_theme_font_size_override("font_size", 14)
 		role.modulate = Color(0.75, 0.8, 0.9)
@@ -90,8 +92,8 @@ func _build() -> void:
 
 		var kit := Label.new()
 		kit.text = _kit_text(hd)
-		kit.position = Vector2(10, 178)
-		kit.size = Vector2(180, 92)
+		kit.position = Vector2(4, 178)
+		kit.size = Vector2(card_w - 8.0, 92)
 		kit.add_theme_font_size_override("font_size", 12)
 		kit.modulate = Color(0.65, 0.7, 0.8)
 		card.add_child(kit)
