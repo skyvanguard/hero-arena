@@ -7,10 +7,18 @@ signal hero_deployed(hero: HeroData)
 
 var _deploy_btn: Control
 var _hero: HeroData = null
+var _cards: Array = []
 
 func _ready() -> void:
 	_hero = HeroRegistry.default_hero()
 	_build()
+
+func _select(hd: HeroData) -> void:
+	if _hero == hd:
+		return
+	_hero = hd
+	for c in _cards:
+		c.control.queue_redraw()
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:
@@ -44,10 +52,18 @@ func _build() -> void:
 	var i := 0
 	for h in HeroRegistry.HEROES:
 		var hd: HeroData = h
-		var card := Panel.new()
+		var card := Control.new()
 		card.position = Vector2(cards_x + i * 220.0, vp.y * 0.5 - 140.0)
 		card.size = Vector2(200, 280)
+		card.mouse_filter = Control.MOUSE_FILTER_STOP
+		var data := hd
+		card.draw.connect(func() -> void: _draw_card(card, data))
+		card.gui_input.connect(func(ev: InputEvent) -> void:
+			if (ev is InputEventScreenTouch and ev.pressed) or (ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT):
+				_select(data)
+		)
 		add_child(card)
+		_cards.append({control = card, data = hd})
 
 		var ic := ColorRect.new()
 		ic.color = hd.color
@@ -91,6 +107,16 @@ func _build() -> void:
 	add_child(hint)
 
 	_make_deploy(vp)
+
+func _draw_card(c: Control, hd: HeroData) -> void:
+	var selected := hd == _hero
+	var r := Rect2(Vector2.ZERO, c.size)
+	c.draw_rect(r, Color(0.10, 0.12, 0.17, 1.0))
+	if selected:
+		c.draw_rect(r.grow(-2.0), Color(1.0, 0.85, 0.4, 1.0), false, 3.0)
+		c.draw_rect(r, Color(1.0, 0.85, 0.4, 0.12))
+	else:
+		c.draw_rect(r.grow(-2.0), Color(0.25, 0.3, 0.4, 1.0), false, 1.5)
 
 func _role_text(hd: HeroData) -> String:
 	var roles := ["ASSAULT", "TANK", "SUPPORT", "CONTROLLER"]
