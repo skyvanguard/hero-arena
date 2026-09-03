@@ -101,8 +101,10 @@ func _fire_projectile(world: World, dir: Vector3) -> void:
 	pr.slow_ratio = projectile_slow_ratio
 	pr.slow_duration = projectile_slow_duration
 	pr.setup(world, _owner, d)
-	pr.global_position = origin
 	world.register_projectile(pr)
+	# Local (not global) position: the world node sits at the origin, and the
+	# projectile is now in the tree so the transform resolves without an error.
+	pr.position = origin
 	world.emit_event("shot", {
 		"shooter" = _owner, "from" = origin, "to" = origin + d * 4.0, "hit" = false,
 	})

@@ -21,7 +21,9 @@ func setup(world: World, caster_: CharacterEntity, pos: Vector3, radius_: float,
 	radius = radius_
 	duration = duration_
 	slow_ratio = slow_
-	global_position = pos
+	# Local position: the zone is added to the world (at the origin) by the
+	# caller right after setup; global_position before in-tree logs an error.
+	position = pos
 
 func _ready() -> void:
 	# Render-side ring (placeholder; original VFX pass with hero art).
