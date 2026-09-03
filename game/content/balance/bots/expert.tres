@@ -1,0 +1,23 @@
+[gd_resource type="Resource" script_class="BotDifficulty" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://content/balance/bot_difficulty.gd" id="1_bd"]
+
+[resource]
+script = ExtResource("1_bd")
+id = "expert"
+label = "Expert"
+reaction = 0.12
+aim_error_deg = 0.3
+retreat_confirm = 0.5
+engage_range = 34
+ideal_range = 18
+retreat_hp = 0.15
+strafe_min = 0.4
+strafe_max = 0.9
+vision_range = 60
+vision_fov_deg = 135
+hearing_range = 34
+lost_sight_timeout = 0.6
+scan_speed = 1.8
+ability_quality = 1
+grouping_threshold = 0.65
