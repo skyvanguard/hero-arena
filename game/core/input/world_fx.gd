@@ -18,6 +18,10 @@ func _on_world_event(name: String, data: Dictionary) -> void:
 	match name:
 		"hit":
 			_spawn_damage_number(data)
+		"heal":
+			# Continuous field ticks are sub-1.0; only label meaningful heals.
+			if float(data.get("amount", 0.0)) >= 1.0:
+				_spawn_heal_number(data)
 		"shot":
 			_spawn_tracer(data)
 		"ability_cast":
@@ -84,6 +88,22 @@ func _particle_burst(pos: Vector3, col: Color, amount: int, speed: float, life: 
 	p.position = pos
 	add_child(p)
 	p.finished.connect(p.queue_free)
+
+func _spawn_heal_number(data: Dictionary) -> void:
+	var pos: Vector3 = data.pos + Vector3(0.3, 0.4, 0) + Vector3(randf_range(-0.2, 0.2), 0, randf_range(-0.2, 0.2))
+	var l := Label3D.new()
+	l.text = ("+%d" % int(data.amount))
+	l.position = pos
+	l.pixel_size = 0.004
+	l.font_size = 44
+	l.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	l.modulate = Color(0.4, 1.0, 0.6)
+	add_child(l)
+	var tween := create_tween()
+	tween.tween_property(l, "position:y", pos.y + 0.7, 0.6)
+	tween.parallel().tween_property(l, "modulate",
+		Color(0.4, 1.0, 0.6, 0.0), 0.6)
+	tween.tween_callback(l.queue_free)
 
 func _spawn_tracer(data: Dictionary) -> void:
 	# Godot 4.7 removed Line3D: tracer is a thin unshaded box stretched from->to.

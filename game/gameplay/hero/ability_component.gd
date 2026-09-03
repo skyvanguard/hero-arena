@@ -21,6 +21,9 @@ var _ult_until := 0.0
 var _ult_mults: Dictionary = {}
 var _streak_hits := 0
 var _streak_last := -999.0
+var _field_until := 0.0
+var _field_params: Dictionary = {}
+var _zone_active := false
 
 func setup(hero_data_: HeroData, owner_: CharacterEntity) -> void:
 	hero_data = hero_data_
@@ -37,10 +40,37 @@ func setup(hero_data_: HeroData, owner_: CharacterEntity) -> void:
 func _world() -> World:
 	return owner_ref.world_ref if owner_ref != null else null
 
-func step(world: World, _dt: float) -> void:
+func step(world: World, dt: float) -> void:
 	if hero_data.passive != null and hero_data.passive.kind == PassiveData.Kind.HIT_STREAK:
 		if _streak_hits > 0 and world.time - _streak_last > float(hero_data.passive.params.window):
 			_streak_hits = 0
+	# ZONE passive (Nimbus): fire-rate bonus while an enemy is in the aura.
+	if hero_data.passive != null and hero_data.passive.kind == PassiveData.Kind.ZONE:
+		var r: float = float(hero_data.passive.params.get("radius", 10.0))
+		var seen := false
+		for ch in world.characters:
+			if ch.team != owner_ref.team and ch.alive and ch.global_position.distance_to(owner_ref.global_position) <= r:
+				seen = true
+				break
+		_zone_active = seen
+	# FIELD passive (Mira's Mending Presence): always-on tick-heal to allies.
+	if hero_data.passive != null and hero_data.passive.kind == PassiveData.Kind.FIELD:
+		var pr: float = float(hero_data.passive.params.get("radius", 7.0))
+		var rate: float = float(hero_data.passive.params.get("heal_per_s", 0.0))
+		for ch in world.characters:
+			if ch.team == owner_ref.team and ch.alive and ch.global_position.distance_to(owner_ref.global_position) <= pr:
+				world.heal(ch, rate * dt, owner_ref)
+	# FIELD ability aura: tick heals + speed boosts to allies in radius.
+	if world.time < _field_until:
+		var fr: float = float(_field_params.get("radius", 6.0))
+		var rate: float = float(_field_params.get("heal_per_s", 0.0))
+		var sboost: float = float(_field_params.get("speed_boost", 0.0))
+		for ch in world.characters:
+			if ch.team == owner_ref.team and ch.alive and ch.global_position.distance_to(owner_ref.global_position) <= fr:
+				if rate > 0.0:
+					world.heal(ch, rate * dt, owner_ref)
+				if sboost > 0.0:
+					ch.apply_speed_boost(world, sboost, 0.1)
 
 func can_cast(index: int) -> bool:
 	var world := _world()
@@ -54,7 +84,7 @@ func cast(index: int) -> bool:
 		ability_failed.emit(index)
 		return false
 	var ab: AbilityData = hero_data.abilities[index]
-	_cooldown_until[index] = world.time + ab.cooldown
+	_cooldown_until[index] = world.time + ab.cooldown * passive_cd_mult()
 	ability_cast.emit(index, ab)
 	world.emit_event("ability_cast", {"hero" = owner_ref, "id" = ab.id, "kind" = ab.kind})
 	_execute(world, ab)
@@ -68,6 +98,14 @@ func _execute(world: World, ab: AbilityData) -> void:
 			_do_burst(world, ab.params)
 		AbilityData.Kind.BUFF:
 			_do_buff(world, ab.params)
+		AbilityData.Kind.HEAL:
+			_do_heal(world, ab.params)
+		AbilityData.Kind.FIELD:
+			_do_field(world, ab.params)
+		AbilityData.Kind.BOOST:
+			_do_boost(world, ab.params)
+		AbilityData.Kind.ZONE:
+			_do_zone(world, ab.params)
 
 func _do_dash(world: World, params: Dictionary) -> void:
 	var dir: Vector3 = owner_ref.aim_direction().normalized()
@@ -100,6 +138,19 @@ func _do_burst(world: World, params: Dictionary) -> void:
 		_burst_pellet(world, from, d, dmg, range_, params)
 
 func _burst_pellet(world: World, from: Vector3, d: Vector3, dmg: float, range_: float, params: Dictionary) -> void:
+	if params.get("projectile", false):
+		var pr := Projectile.new()
+		pr.name = "BurstProj_%d" % int(world.time * 1000.0)
+		pr.damage = dmg
+		pr.headshot_mult = 1.5
+		pr.speed = float(params.get("proj_speed", 20.0))
+		pr.max_range = range_
+		pr.slow_ratio = float(params.get("slow_ratio", 0.0))
+		pr.slow_duration = float(params.get("slow_duration", 0.0))
+		pr.setup(world, owner_ref, d)
+		pr.global_position = from
+		world.register_projectile(pr)
+		return
 	var to := from + d * range_
 	var q := PhysicsRayQueryParameters3D.create(from, to,
 			CharacterEntity.LAYER_BODY | CharacterEntity.LAYER_HEAD)
@@ -132,6 +183,45 @@ func _do_buff(world: World, params: Dictionary) -> void:
 	}
 	ult_activated.emit()
 
+func _do_heal(world: World, params: Dictionary) -> void:
+	var radius: float = float(params.radius)
+	var amount: float = float(params.amount)
+	for ch in world.characters:
+		if ch.team == owner_ref.team and ch.alive and ch.global_position.distance_to(owner_ref.global_position) <= radius:
+			world.heal(ch, amount, owner_ref)
+
+func _do_field(world: World, params: Dictionary) -> void:
+	_field_until = world.time + float(params.duration)
+	_field_params = params
+
+func _do_boost(world: World, params: Dictionary) -> void:
+	var radius: float = float(params.get("radius", 0.0))
+	var duration: float = float(params.get("duration", 0.0))
+	var sboost: float = float(params.get("speed_boost", 0.0))
+	var rboost: float = float(params.get("rate_boost", 0.0))
+	if params.get("refill", false) and owner_ref.weapon != null:
+		owner_ref.weapon.start_refill()
+	var heal_amt: float = float(params.get("heal", 0.0))
+	for ch in world.characters:
+		if ch.team == owner_ref.team and ch.alive and ch.global_position.distance_to(owner_ref.global_position) <= radius:
+			if sboost > 0.0:
+				ch.apply_speed_boost(world, sboost, duration)
+			if rboost > 0.0:
+				ch.apply_rate_boost(world, rboost, duration)
+			if heal_amt > 0.0:
+				world.heal(ch, heal_amt, owner_ref)
+
+func _do_zone(world: World, params: Dictionary) -> void:
+	var dir: Vector3 = owner_ref.aim_direction().normalized()
+	var dist: float = float(params.distance)
+	var pos: Vector3 = owner_ref.global_position + Vector3(dir.x * dist, 0.0, dir.z * dist)
+	pos.y = 0.1
+	var z := ZoneEntity.new()
+	z.name = "Zone_%d" % int(world.time * 100.0)
+	z.color = hero_data.color if hero_data != null else Color(0.6, 0.5, 1.0)
+	z.setup(world, owner_ref, pos, float(params.radius), float(params.duration), float(params.slow_ratio))
+	world.register_zone(z)
+
 ## ---- multipliers consumed by the weapon/physics each tick ----
 func is_ult_active() -> bool:
 	var world := _world()
@@ -163,6 +253,18 @@ func passive_damage_taken_mult() -> float:
 		return 1.0 - float(hero_data.passive.params.get("dmg_reduce", 0.0))
 	return 1.0
 
+## Fire-rate multiplier from the passive (ZONE: while an enemy is in radius).
+func passive_rate_mult() -> float:
+	if hero_data.passive != null and hero_data.passive.kind == PassiveData.Kind.ZONE and _zone_active:
+		return float(hero_data.passive.params.get("rate_mult", 1.0))
+	return 1.0
+
+## Cooldown multiplier from the passive (FLEX: cd_mult < 1).
+func passive_cd_mult() -> float:
+	if hero_data.passive != null and hero_data.passive.kind == PassiveData.Kind.FLEX:
+		return float(hero_data.passive.params.get("cd_mult", 1.0))
+	return 1.0
+
 func _streak_mult(key: String) -> float:
 	if hero_data.passive == null or hero_data.passive.kind != PassiveData.Kind.HIT_STREAK or _streak_hits <= 0:
 		return 1.0
@@ -186,6 +288,9 @@ func activate_ult() -> bool:
 
 func on_damage_dealt(amount: float) -> void:
 	_add_charge(amount * hero_data.charge_per_damage_dealt)
+
+func on_heal_dealt(amount: float) -> void:
+	_add_charge(amount * hero_data.charge_per_heal_dealt)
 
 func on_damage_taken(amount: float) -> void:
 	_add_charge(amount * hero_data.charge_per_damage_taken)

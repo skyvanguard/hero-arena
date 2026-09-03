@@ -87,10 +87,14 @@ func _update_recoil(dt: float) -> void:
 	_gun.rotation.x = -_recoil * 0.7
 
 func _sync_ability_mults() -> void:
+	var rate_boost := 1.0 + rate_boost_ratio
 	if ability != null:
 		weapon.fire_rate_mult = ability.fire_rate_mult()
 		weapon.damage_mult = ability.damage_mult()
 		weapon.spread_mult = ability.spread_mult()
+		weapon.rate_boost_mult = rate_boost * ability.passive_rate_mult()
+	else:
+		weapon.rate_boost_mult = rate_boost
 
 func aim_direction() -> Vector3:
 	if is_player:

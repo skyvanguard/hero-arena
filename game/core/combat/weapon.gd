@@ -29,6 +29,8 @@ signal fired(shooter: CharacterEntity)
 var fire_rate_mult := 1.0
 var damage_mult := 1.0
 var spread_mult := 1.0
+## Support rate boosts (Patch/Nimbus ults): synced by the hero each tick.
+var rate_boost_mult := 1.0
 
 var ammo := 0
 var reloading := false
@@ -50,6 +52,13 @@ func setup(owner: CharacterEntity) -> void:
 func ready() -> void:
 	ammo = clip_size
 
+## Instant refill (Patch's Field Resupply): cancel reload, full clip.
+func start_refill() -> void:
+	reloading = false
+	_reload_t = 0.0
+	ammo = clip_size
+	_cd = 0.0
+
 func start_reload() -> void:
 	if reloading or ammo >= clip_size:
 		return
@@ -66,7 +75,7 @@ func update(world: World, dt: float, firing: bool, dir: Vector3) -> void:
 			ammo = clip_size
 			world.emit_event("reload_done", {"ch" = _owner})
 	if firing and not reloading and _cd <= 0.0 and ammo > 0:
-		_cd = 1.0 / (fire_rate * fire_rate_mult)
+		_cd = 1.0 / (fire_rate * fire_rate_mult * rate_boost_mult)
 		ammo -= 1
 		shots_fired += 1
 		if mode == "projectile":

@@ -9,6 +9,7 @@ signal world_event(name: String, data: Dictionary)
 var time := 0.0
 var characters: Array[CharacterEntity] = []
 var projectiles: Array[Projectile] = []
+var zones: Array[ZoneEntity] = []
 var spawn_points: Dictionary = {}  # team(int) -> Array[Vector3]
 var score: Dictionary = {0: 0, 1: 0}
 var _timers: Array = []            # [{at: float, fn: Callable}]
@@ -30,6 +31,23 @@ func register_projectile(p: Projectile) -> void:
 	add_child(p)
 	p.world_ref = self
 	projectiles.append(p)
+
+func register_zone(z: ZoneEntity) -> void:
+	add_child(z)
+	z.world_ref = self
+	zones.append(z)
+
+## Authoritative heal (supports, D7): capped at max_hp, event for HUD/VFX.
+func heal(target: CharacterEntity, amount: float, source: CharacterEntity) -> void:
+	if not target.alive:
+		return
+	var healed := minf(amount, target.max_hp - target.hp)
+	if healed <= 0.0:
+		return
+	target.hp += healed
+	if source != null and source.ability != null:
+		source.ability.on_heal_dealt(healed)
+	emit_event("heal", {"target" = target, "source" = source, "amount" = healed, "pos" = target.global_position})
 
 func schedule(at_time: float, fn: Callable) -> void:
 	_timers.append({at = at_time, fn = fn})
@@ -58,6 +76,13 @@ func step(dt: float) -> void:
 		if not pr.dead:
 			alive_pr.append(pr)
 	projectiles = alive_pr
+	for z in zones:
+		z.step(self, dt)
+	var alive_z: Array[ZoneEntity] = []
+	for z in zones:
+		if not z.dead:
+			alive_z.append(z)
+	zones = alive_z
 
 func world_protected(target: CharacterEntity) -> bool:
 	return time < target.protected_until

@@ -49,6 +49,11 @@ var _since_damage := 1e9
 var protected_until := 0.0
 var slow_ratio := 0.0     ## strongest active slow (0..1), decays via slow_until
 var slow_until := 0.0
+# Support-side boosts (data-driven): strongest active wins, like slow.
+var speed_boost_ratio := 0.0
+var speed_boost_until := 0.0
+var rate_boost_ratio := 0.0
+var rate_boost_until := 0.0
 var dash_lock_until := 0.0  ## while active, movement blend is skipped (dash impulse holds)
 var _head_marker: Marker3D
 var _muzzle: Marker3D
@@ -88,6 +93,10 @@ func step(world: World, dt: float) -> void:
 		ability.step(world, dt)
 	if world.time >= slow_until:
 		slow_ratio = 0.0
+	if world.time >= speed_boost_until:
+		speed_boost_ratio = 0.0
+	if world.time >= rate_boost_until:
+		rate_boost_ratio = 0.0
 	_update_timers(world, dt)
 	_update_regen(world, dt)
 	_update_physics(world, dt)
@@ -96,6 +105,14 @@ func apply_slow(world: World, ratio: float, duration: float) -> void:
 	var new_ratio := ratio if world.time >= slow_until else maxf(slow_ratio, ratio)
 	slow_ratio = new_ratio
 	slow_until = maxf(slow_until, world.time + duration)
+
+func apply_speed_boost(world: World, ratio: float, duration: float) -> void:
+	speed_boost_ratio = ratio if world.time >= speed_boost_until else maxf(speed_boost_ratio, ratio)
+	speed_boost_until = maxf(speed_boost_until, world.time + duration)
+
+func apply_rate_boost(world: World, ratio: float, duration: float) -> void:
+	rate_boost_ratio = ratio if world.time >= rate_boost_until else maxf(rate_boost_ratio, ratio)
+	rate_boost_until = maxf(rate_boost_until, world.time + duration)
 
 func _update_timers(world: World, dt: float) -> void:
 	_since_damage += dt
@@ -128,6 +145,7 @@ func _update_physics(world: World, dt: float) -> void:
 	if ability != null:
 		spd *= ability.speed_mult()
 	spd *= (1.0 - slow_ratio)
+	spd *= (1.0 + speed_boost_ratio)
 	var wish := (fwd * move_input.y + right * move_input.x) * spd
 	var cur := Vector3(vel.x, 0.0, vel.z)
 	var blend := 0.0 if world.time < dash_lock_until else (minf(1.0, 12.0 * dt) if is_on_floor() else minf(1.0, 5.0 * dt))

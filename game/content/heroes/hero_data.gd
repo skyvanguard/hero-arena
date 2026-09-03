@@ -26,4 +26,5 @@ enum SubRole { SUSTAINED, SPRINT, ARMOR, FLEX, FIELD, ZONE }
 @export var ult_max: float = 100.0
 @export var charge_per_damage_dealt: float = 0.35
 @export var charge_per_damage_taken: float = 0.10
+@export var charge_per_heal_dealt: float = 0.0
 @export var charge_per_kill: float = 15.0
