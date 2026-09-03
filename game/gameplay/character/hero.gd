@@ -9,6 +9,11 @@ var _camera: Camera3D = null
 var _cam_yaw := 0.0
 var _cam_pitch := -0.18
 
+# Cosmetic gun recoil (render-side; harmless headless).
+const GUN_BASE_Z := 0.4
+var _gun: Node3D = null
+var _recoil := 0.0
+
 const LOOK_SPEED := 0.16
 
 func _ready() -> void:
@@ -17,6 +22,13 @@ func _ready() -> void:
 		_camera = camera_rig.get_node("Camera3D")
 		_camera.current = true
 		_apply_camera()
+	_gun = get_node_or_null("Gun")
+	if _gun != null and weapon != null:
+		weapon.fired.connect(_on_weapon_fired)
+
+func _on_weapon_fired(_shooter: CharacterEntity) -> void:
+	# Recoil kick: gun slides back and tilts up; decays in step().
+	_recoil = minf(_recoil + 0.05, 0.16)
 
 func _apply_camera() -> void:
 	if camera_rig == null:
@@ -53,6 +65,7 @@ func step(world: World, dt: float) -> void:
 		want_fire = Controls.fire
 	# Timers, regen, movement, physics — same path for humans and bots.
 	super.step(world, dt)
+	_update_recoil(dt)
 	_sync_ability_mults()
 	if is_player:
 		var cf := _camera_forward()
@@ -64,6 +77,14 @@ func step(world: World, dt: float) -> void:
 			var dir := (aim_target - muzzle_pos()).normalized()
 			weapon.update(world, dt, true, dir)
 			face_toward(aim_target)
+
+func _update_recoil(dt: float) -> void:
+	if _gun == null:
+		return
+	if _recoil > 0.0:
+		_recoil = maxf(_recoil - dt * 0.55, 0.0)
+	_gun.position.z = GUN_BASE_Z - _recoil
+	_gun.rotation.x = -_recoil * 0.7
 
 func _sync_ability_mults() -> void:
 	if ability != null:

@@ -13,6 +13,9 @@ extends Node
 @export var spread_deg := 0.5
 @export var reserve_infinite := true
 
+## Fired by _fire on every shot (render-side listeners: recoil, SFX, VFX).
+signal fired(shooter: CharacterEntity)
+
 ## Ability-driven multipliers, synced by the hero each tick (server-side).
 var fire_rate_mult := 1.0
 var damage_mult := 1.0
@@ -95,6 +98,7 @@ func _fire(world: World, dir: Vector3) -> void:
 		"shooter" = _owner, "from" = origin, "to" = end,
 		"hit" = hit_ch != null,
 	})
+	fired.emit(_owner)
 
 func _apply_spread(dir: Vector3) -> Vector3:
 	var base := dir.normalized()
