@@ -5,6 +5,8 @@ extends Resource
 
 enum Kind {
 	HIT_STREAK,  ## params: stack_hits, window, tiers (array of {speed_mult, spread_mult})
+	SPRINT,      ## params: speed_mult — constant movement-speed multiplier (sprint identity)
+	ARMOR,       ## params: dmg_reduce — flat fraction of incoming damage negated (tank identity)
 }
 
 @export var id: String = ""

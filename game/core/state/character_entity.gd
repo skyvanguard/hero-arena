@@ -156,12 +156,14 @@ func apply_damage(amount: float, source: CharacterEntity, is_head: bool,
 		hit_pos: Vector3, prot: bool) -> void:
 	if not alive:
 		return
+	# Passives may mitigate before the HP hit; ult charge tracks the final amount.
+	var mitigated := amount * (ability.passive_damage_taken_mult() if ability != null else 1.0)
 	if ability != null:
-		ability.on_damage_taken(amount)
-	hp -= amount
+		ability.on_damage_taken(mitigated)
+	hp -= mitigated
 	_since_damage = 0.0
 	world_ref.emit_event("hit", {
-		"target" = self, "source" = source, "amount" = amount,
+		"target" = self, "source" = source, "amount" = mitigated, "raw" = amount,
 		"is_head" = is_head, "pos" = hit_pos, "prot" = prot,
 	})
 	emit_hp()

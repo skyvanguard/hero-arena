@@ -150,13 +150,21 @@ func spread_mult() -> float:
 	return passive_spread_mult() * _ult_mults.get("spread_mult", 1.0) if is_ult_active() else passive_spread_mult()
 
 func passive_speed_mult() -> float:
+	if hero_data.passive != null and hero_data.passive.kind == PassiveData.Kind.SPRINT:
+		return float(hero_data.passive.params.get("speed_mult", 1.0))
 	return _streak_mult("speed_mult")
 
 func passive_spread_mult() -> float:
 	return _streak_mult("spread_mult")
 
+## Incoming damage multiplier from the passive (ARMOR: 1 - dmg_reduce).
+func passive_damage_taken_mult() -> float:
+	if hero_data.passive != null and hero_data.passive.kind == PassiveData.Kind.ARMOR:
+		return 1.0 - float(hero_data.passive.params.get("dmg_reduce", 0.0))
+	return 1.0
+
 func _streak_mult(key: String) -> float:
-	if hero_data.passive == null or _streak_hits <= 0:
+	if hero_data.passive == null or hero_data.passive.kind != PassiveData.Kind.HIT_STREAK or _streak_hits <= 0:
 		return 1.0
 	var p: Dictionary = hero_data.passive.params
 	var tier: int = clampi(int(_streak_hits / int(p.stack_hits)) - 1, 0, int(p.tiers.size()) - 1)
