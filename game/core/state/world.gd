@@ -8,6 +8,7 @@ signal world_event(name: String, data: Dictionary)
 
 var time := 0.0
 var characters: Array[CharacterEntity] = []
+var projectiles: Array[Projectile] = []
 var spawn_points: Dictionary = {}  # team(int) -> Array[Vector3]
 var score: Dictionary = {0: 0, 1: 0}
 var _timers: Array = []            # [{at: float, fn: Callable}]
@@ -21,6 +22,14 @@ func setup_spawn(team: int, points: Array[Vector3]) -> void:
 func register_character(ch: CharacterEntity) -> void:
 	ch.world_ref = self
 	characters.append(ch)
+
+func unregister_character(ch: CharacterEntity) -> void:
+	characters.erase(ch)
+
+func register_projectile(p: Projectile) -> void:
+	add_child(p)
+	p.world_ref = self
+	projectiles.append(p)
 
 func schedule(at_time: float, fn: Callable) -> void:
 	_timers.append({at = at_time, fn = fn})
@@ -36,9 +45,19 @@ func step(dt: float) -> void:
 			keep.append(t)
 	_timers = keep
 	for fn in due:
-		fn.call()
+		# Bound callables of freed nodes become null (heroes freed mid-match
+		# can leave pending timers: respawn schedules, flash fades, dashes).
+		if fn.is_valid():
+			fn.call()
 	for ch in characters:
 		ch.step(self, dt)
+	for pr in projectiles:
+		pr.step(self, dt)
+	var alive_pr: Array[Projectile] = []
+	for pr in projectiles:
+		if not pr.dead:
+			alive_pr.append(pr)
+	projectiles = alive_pr
 
 func world_protected(target: CharacterEntity) -> bool:
 	return time < target.protected_until

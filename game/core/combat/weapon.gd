@@ -12,6 +12,15 @@ extends Node
 @export var max_range := 120.0
 @export var spread_deg := 0.5
 @export var reserve_infinite := true
+## Hitscan pellets per shot (shotguns: 8; rifles: 1). Each pellet rolls spread.
+@export var pellets := 1
+## Phase 3 weapon framework: "hitscan" (instant ray) or "projectile" (stepped
+## Projectile entity). Projectile tuning lives in the data-driven profile.
+@export var mode := "hitscan"
+@export var projectile_speed := 22.0
+@export var projectile_range := 60.0
+@export var projectile_slow_ratio := 0.0
+@export var projectile_slow_duration := 0.0
 
 ## Fired by _fire on every shot (render-side listeners: recoil, SFX, VFX).
 signal fired(shooter: CharacterEntity)
@@ -60,7 +69,35 @@ func update(world: World, dt: float, firing: bool, dir: Vector3) -> void:
 		_cd = 1.0 / (fire_rate * fire_rate_mult)
 		ammo -= 1
 		shots_fired += 1
-		_fire(world, dir)
+		if mode == "projectile":
+			_fire_projectile(world, dir)
+		else:
+			_fire(world, dir)
+
+func _fire_projectile(world: World, dir: Vector3) -> void:
+	if _flash and _flash.visible == false:
+		_flash.visible = true
+		_flash.light_energy = 1.2
+		world.schedule(world.time + 0.04, func() -> void:
+			if _flash:
+				_flash.visible = false)
+	var origin := _owner.muzzle_pos()
+	var d := _apply_spread(dir)
+	var pr := Projectile.new()
+	pr.name = "Proj_%d" % shots_fired
+	pr.damage = damage * damage_mult
+	pr.headshot_mult = headshot_mult
+	pr.speed = projectile_speed
+	pr.max_range = projectile_range
+	pr.slow_ratio = projectile_slow_ratio
+	pr.slow_duration = projectile_slow_duration
+	pr.setup(world, _owner, d)
+	pr.global_position = origin
+	world.register_projectile(pr)
+	world.emit_event("shot", {
+		"shooter" = _owner, "from" = origin, "to" = origin + d * 4.0, "hit" = false,
+	})
+	fired.emit(_owner)
 
 func _fire(world: World, dir: Vector3) -> void:
 	if _flash and _flash.visible == false:
@@ -70,33 +107,39 @@ func _fire(world: World, dir: Vector3) -> void:
 			if _flash:
 				_flash.visible = false)
 	var origin := _owner.muzzle_pos()
-	var d := _apply_spread(dir)
-	var to := origin + d * max_range
-	var q := PhysicsRayQueryParameters3D.create(origin, to,
-			CharacterEntity.LAYER_BODY | CharacterEntity.LAYER_HEAD)
-	q.exclude = [_owner.get_rid()]
-	var res := _owner.get_world_3d().get_direct_space_state().intersect_ray(q)
-	var end := to
-	var hit_ch: CharacterEntity = null
-	var is_head := false
-	if res:
-		end = res.position
-		var node: Node = res.collider
-		while node != null and not (node is CharacterEntity):
-			node = node.get_parent()
-		if node is CharacterEntity:
-			hit_ch = node
-			if res.collider is Area3D:
-				is_head = true
-	if hit_ch != null and hit_ch != _owner:
-		var dmg := damage * damage_mult * (headshot_mult if is_head else 1.0)
-		world.damage(hit_ch, dmg, _owner, is_head, end)
-		if _owner.ability != null:
-			_owner.ability.on_damage_dealt(dmg)
-			_owner.ability.on_hit_landed()
+	var any_hit := false
+	var first_end := origin + dir * max_range
+	for i in pellets:
+		var d := _apply_spread(dir)
+		var to := origin + d * max_range
+		var q := PhysicsRayQueryParameters3D.create(origin, to,
+				CharacterEntity.LAYER_BODY | CharacterEntity.LAYER_HEAD)
+		q.exclude = [_owner.get_rid()]
+		var res := _owner.get_world_3d().get_direct_space_state().intersect_ray(q)
+		var end := to
+		var hit_ch: CharacterEntity = null
+		var is_head := false
+		if res:
+			end = res.position
+			var node: Node = res.collider
+			while node != null and not (node is CharacterEntity):
+				node = node.get_parent()
+			if node is CharacterEntity:
+				hit_ch = node
+				if res.collider is Area3D:
+					is_head = true
+		if hit_ch != null and hit_ch != _owner:
+			var dmg := damage * damage_mult * (headshot_mult if is_head else 1.0)
+			world.damage(hit_ch, dmg, _owner, is_head, end)
+			if _owner.ability != null:
+				_owner.ability.on_damage_dealt(dmg)
+				_owner.ability.on_hit_landed()
+			any_hit = true
+		if i == 0:
+			first_end = end
 	world.emit_event("shot", {
-		"shooter" = _owner, "from" = origin, "to" = end,
-		"hit" = hit_ch != null,
+		"shooter" = _owner, "from" = origin, "to" = first_end,
+		"hit" = any_hit,
 	})
 	fired.emit(_owner)
 
