@@ -11,6 +11,12 @@ var _deploy_btn: Control
 var _practice_btn: Control
 var _join_edit: LineEdit
 var _join_btn: Button
+var _scan_btn: Button
+var _result_a: Button
+var _result_b: Button
+var _scanner: DiscoveryScanner = null
+var _scan_active := false
+var _scan_count := 0
 var _hero: HeroData = null
 var _cards: Array = []
 var _diff_btns: Array = []
@@ -25,6 +31,11 @@ func _select(hd: HeroData) -> void:
 	_hero = hd
 	for c in _cards:
 		c.control.queue_redraw()
+
+func _process(_delta: float) -> void:
+	# Pump the LAN discovery scanner while a scan is in flight.
+	if _scan_active and _scanner != null:
+		_scanner.pump()
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:
@@ -194,9 +205,79 @@ func _make_join_row(vp: Vector2) -> void:
 	_join_btn.add_theme_font_size_override("font_size", 12)
 	_join_btn.pressed.connect(_join)
 	add_child(_join_btn)
+	# LAN discovery (Phase 5): SCAN broadcasts the discovery port (and
+	# unicasts it too when the field holds an explicit host - that path also
+	# works across the emulator NAT, where broadcasts do not reach the host).
+	_scan_btn = Button.new()
+	_scan_btn.text = "SCAN"
+	_scan_btn.position = Vector2(vp.x * 0.5 + 110.0, vp.y - 158.0)
+	_scan_btn.size = Vector2(52.0, 26.0)
+	_scan_btn.add_theme_font_size_override("font_size", 12)
+	_scan_btn.pressed.connect(_scan)
+	add_child(_scan_btn)
+	# Up to two result slots on the row: right of SCAN and left of the edit.
+	_result_a = _make_result_slot(Vector2(vp.x * 0.5 + 166.0, vp.y - 158.0),
+			Vector2(vp.x - (vp.x * 0.5 + 166.0) - 8.0, 26.0))
+	_result_b = _make_result_slot(Vector2(8.0, vp.y - 158.0),
+			Vector2(vp.x * 0.5 - 106.0 - 16.0, 26.0))
+
+func _make_result_slot(pos: Vector2, size: Vector2) -> Button:
+	var b := Button.new()
+	b.text = ""
+	b.position = pos
+	b.size = size
+	b.add_theme_font_size_override("font_size", 11)
+	b.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	b.visible = false
+	b.pressed.connect(func() -> void:
+		if b.text.begins_with("ip:"):
+			_join_edit.text = b.text.substr(3)
+			_join_edit.queue_redraw()
+	)
+	add_child(b)
+	return b
 
 func _on_join_text(_t: String) -> void:
 	_join()
+
+func _scan() -> void:
+	if _scan_active:
+		return
+	_scan_active = true
+	_scan_count = 0
+	_scan_btn.text = "..."
+	_result_a.visible = false
+	_result_b.visible = false
+	_scanner = DiscoveryScanner.new()
+	_scanner.found.connect(_on_server_found)
+	_scanner.done.connect(_on_scan_done)
+	# Unicast the explicit host from the field (if any) in addition to the
+	# broadcast.
+	var host := _join_edit.text.strip_edges()
+	var unicast := ""
+	if host != "":
+		unicast = host.split(":")[0]
+	_scanner.start(unicast)
+
+func _on_server_found(info: Dictionary) -> void:
+	var slot: Button = _result_a if _scan_count == 0 else _result_b
+	_scan_count += 1
+	var word: String = ["open", "full", "over"][clampi(int(info.state), 0, 2)]
+	slot.text = "ip:" + str(info.ip) + ":" + str(info.game_port)
+	slot.tooltip_text = str(info.ip) + ":" + str(info.game_port) + "  " + word 			+ "  " + str(info.humans) + "/" + str(info.team_size) + "  (tap to fill)"
+	slot.visible = true
+	slot.queue_redraw()
+
+func _on_scan_done(count: int) -> void:
+	_scan_active = false
+	_scan_btn.text = "SCAN"
+	_scan_btn.queue_redraw()
+	if count == 0:
+		_result_a.text = "no servers found"
+		_result_a.tooltip_text = ""
+		_result_a.visible = true
+		_result_a.queue_redraw()
+	_scanner = null
 
 func _join() -> void:
 	var hp := _join_edit.text.strip_edges()
