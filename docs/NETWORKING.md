@@ -213,6 +213,14 @@ Dispatch is by first magic byte, channel-independent:
   50 s combat (≥2 kills) + kill feed, **drop → freeze → new client re-hellos
   with the token → same CharacterEntity instance + same char id, token
   consumed**, server keeps stepping.
+- `tests/test_net_profiles.tscn` — **SimLink latency/loss profiles (round 28, 30
+  checks)**: the test_net_sim battery re-run at three profiles — 50 ms RTT +
+  10% loss, 150 ms RTT + 2% loss (the shipped baseline), 300 ms RTT + 10%
+  loss — with a fresh world/server/client per profile. Prediction-tracking
+  budget scales with RTT (unreconciled window ≈ RTT/2 + interpolation): 1.5 m
+  at 150 ms, 3.0 m at 300 ms. Connect/slot, input roundtrip, combat + kill
+  feed, and the drop → freeze → token reattach path all hold at every
+  profile.
 - `tests/test_discovery.tscn` — UDP ping/reply over loopback (6 checks):
   open server answers with game port + state + humans, join reflected in the
   headcount, full and over states advertised (over wins over full), dead port
@@ -230,7 +238,8 @@ Dispatch is by first magic byte, channel-independent:
   broadcast leg awaits a real WiFi LAN. Verification also caught and fixed
   two bugs (results-overlay team-0 assumption; respawn lambda capturing a
   freed character — see ROADMAP round 12).
-- Full battery: 10 headless suites, 205 checks.
+- Full battery: 12 headless suites, 247 checks (10 pre-lobby suites at 205 +
+  test_lobby 12 (round 13) + test_net_profiles 30 (round 28)).
 
 ## 8. v1.1 tradeoffs (explicit)
 
