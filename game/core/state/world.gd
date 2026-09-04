@@ -81,10 +81,18 @@ func step(dt: float) -> void:
 			keep.append(t)
 	_timers = keep
 	for fn in due:
-		# Bound callables of freed nodes become null (heroes freed mid-match
-		# can leave pending timers: respawn schedules, flash fades, dashes).
-		if fn.is_valid():
-			fn.call()
+		# Callables of freed nodes must not fire. is_valid() catches bound
+		# methods and (in 4.7) instance lambdas whose owner was freed; the
+		# get_object() check additionally catches the mid-frame case where a
+		# character is freed (e.g. a yielding bot, immediate free during a
+		# tick) before the physics flush and the lambda still reports valid
+		# while its captured/self instance is gone.
+		if not fn.is_valid():
+			continue
+		var obj = fn.get_object()
+		if obj != null and obj != self and not is_instance_valid(obj):
+			continue
+		fn.call()
 	for ch in characters:
 		ch.step(self, dt)
 	_record_history()

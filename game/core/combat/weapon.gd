@@ -88,7 +88,7 @@ func _fire_projectile(world: World, dir: Vector3) -> void:
 		_flash.visible = true
 		_flash.light_energy = 1.2
 		world.schedule(world.time + 0.04, func() -> void:
-			if _flash:
+			if _flash and is_instance_valid(_flash):
 				_flash.visible = false)
 	var origin := _owner.muzzle_pos()
 	var d := _apply_spread(dir)
@@ -115,7 +115,7 @@ func _fire(world: World, dir: Vector3) -> void:
 		_flash.visible = true
 		_flash.light_energy = 2.0
 		world.schedule(world.time + 0.05, func() -> void:
-			if _flash:
+			if _flash and is_instance_valid(_flash):
 				_flash.visible = false)
 	var origin := _owner.muzzle_pos()
 	var any_hit := false
