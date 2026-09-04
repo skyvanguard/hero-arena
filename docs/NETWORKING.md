@@ -1,11 +1,13 @@
 # NETWORKING.md — Architecture & Protocol (Phase 5, as-built v1.1)
 
-Status: **v1.1 shipped (rounds 10-11)** — v1 (dedicated headless server, LAN
+Status: **v1.1 shipped (rounds 10-12)** — v1 (dedicated headless server, LAN
 direct connect, loopback suite) plus: **server input sanitization + seq gate,
 session-token reconnect, World lag-comp hitscan, client prediction +
-reconciliation, SimLink net-sim harness** (150 ms RTT + 2% loss suite), and
+reconciliation, SimLink net-sim harness** (150 ms RTT + 2% loss suite),
 **LAN discovery** (UDP broadcast/unicast ping with live match state, SCAN in
-hero-select). Internet play remains the last Phase 5 item.
+hero-select), and **two-device LAN verification** (round 12: two Android
+emulators + host-dedicated server in one live match). Internet play remains
+the last Phase 5 item.
 
 ## 1. Transport (as-built)
 
@@ -213,6 +215,19 @@ Dispatch is by first magic byte, channel-independent:
   open server answers with game port + state + humans, join reflected in the
   headcount, full and over states advertised (over wins over full), dead port
   finishes empty.
+- **Two-device live verification (round 12, not a suite — needs Android):**
+  two emulators (different profiles: small portrait-class AVD + pixel_5
+  2340x1080 landscape) + a host-dedicated server. Both devices SCAN-found the
+  server, joined the same live match on opposing teams, and the cross-device
+  checks held: a human headshot on device 2 appeared in device 1's kill feed;
+  both clients rendered the arena + HUD + touch controls at their respective
+  resolutions; results overlays were per-side correct (team-0 device
+  VICTORY 15-8, team-1 device DEFEAT 8-15 local-team-first); 0 script errors
+  on both devices and the server; PSS ~149-152 MB each. The emulator NAT only
+  reaches the UNICAST discovery leg (broadcasts do not cross it) — the
+  broadcast leg awaits a real WiFi LAN. Verification also caught and fixed
+  two bugs (results-overlay team-0 assumption; respawn lambda capturing a
+  freed character — see ROADMAP round 12).
 - Full battery: 10 headless suites, 205 checks.
 
 ## 8. v1.1 tradeoffs (explicit)
