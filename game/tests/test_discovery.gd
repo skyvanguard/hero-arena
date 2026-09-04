@@ -45,6 +45,9 @@ func _scan(unicast: String, port: int) -> Array:
 	while not sc.finished and Time.get_ticks_msec() - t0 < 2500:
 		sc.pump()
 		await get_tree().process_frame
+	# The scanner is a bare (never-added) Node: free it or it leaks at exit
+	# (Node + its PacketPeerUDP + the discovered-script resource ref).
+	sc.free()
 	return out
 
 func _ready() -> void:
