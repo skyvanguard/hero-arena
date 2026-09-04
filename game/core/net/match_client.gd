@@ -318,7 +318,9 @@ func _ensure_predicted(c: Dictionary) -> void:
 		for k in n.get_children():
 			stack.append(k)
 	_pch.collision_mask = CharacterEntity.LAYER_WORLD
-	_pch.global_position = c.pos
+	# Not in the tree yet: local position (_pw is at the origin); global
+	# pre-add errors on 4.7.
+	_pch.position = c.pos
 	_pch.rotation.y = float(c.rot_y)
 	_pch.hide_visual()  # the VIEW renders; the twin is physics-only
 	_pw.add_child(_pch)
@@ -455,9 +457,11 @@ func _ensure_view(id: int, hero_idx: int, team: int) -> CharacterEntity:
 	if is_me:
 		ch.display_name = "You"
 	# First frame starts from the latest known server state, not (0,0,0).
+	# ch is not in the tree yet: use local position (world is at the origin,
+	# so local == global); setting global_position pre-add errors on 4.7.
 	var c: Variant = _find_char(_ring.back(), id)
 	if c != null:
-		ch.global_position = c.pos
+		ch.position = c.pos
 		ch.rotation.y = float(c.rot_y)
 	world.add_child(ch)
 	_views[id] = ch
