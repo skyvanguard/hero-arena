@@ -42,7 +42,9 @@ func _on_net_deploy(host_port: String, hero_data: HeroData) -> void:
 	_net_client.setup(host_port, hero_data)
 
 func _on_net_ended(winner: int, score: Array, wtime: float, lost: bool, title: String) -> void:
-	_show_results(winner, score, wtime, title if lost else "")
+	# Net titles are computed by the client from my_team (offline is always
+	# team 0 and may still rely on the _show_results fallback).
+	_show_results(winner, score, wtime, title)
 
 func _on_deploy(hero_data: HeroData) -> void:
 	if _hero_select != null:
@@ -191,12 +193,15 @@ func _show_results(winner: int, score: Array, wtime: float, title_override := ""
 	# which would swallow the tap — see the hint label incident).
 	var title := Label.new()
 	title.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	title.text = title_override if title_override != "" else ("VICTORY" if winner == 0 else ("DEFEAT" if winner == 1 else "DRAW"))
+	# Fallback (offline, local is always team 0) or the client-provided title
+	# (net, computed from my_team).
+	var eff_title := title_override if title_override != "" else ("VICTORY" if winner == 0 else ("DEFEAT" if winner == 1 else "DRAW"))
+	title.text = eff_title
 	title.position = Vector2(vp.x * 0.5 - 160, vp.y * 0.28)
 	title.size = Vector2(320, 64)
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title.add_theme_font_size_override("font_size", 52)
-	title.modulate = Color(1.0, 0.85, 0.4) if winner == 0 else Color(1.0, 1.0, 1.0)
+	title.modulate = Color(1.0, 0.85, 0.4) if eff_title == "VICTORY" else Color(1.0, 1.0, 1.0)
 	_results.add_child(title)
 	var sub := Label.new()
 	sub.mouse_filter = Control.MOUSE_FILTER_IGNORE

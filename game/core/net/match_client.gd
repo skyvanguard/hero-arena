@@ -236,7 +236,13 @@ func _on_event(d: Dictionary) -> void:
 				line += " (HS)"
 			hud.set_feed(line)
 		NetProtocol.E_MATCH_OVER:
-			_finish(int(d.winner), d.score, float(d.time), false, "")
+			var w: int = int(d.winner)
+			var lost := w != -1 and w != my_team
+			var sc: Array = d.score
+			if my_team == 1:
+				sc = [sc[1], sc[0]]  # local-team-first for the results overlay
+			_finish(w, sc, float(d.time), lost,
+					"" if w == -1 else ("DEFEAT" if lost else "VICTORY"))
 
 func _on_snapshot(d: Dictionary) -> void:
 	_ring.append(d)
