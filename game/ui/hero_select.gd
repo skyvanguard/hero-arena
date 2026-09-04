@@ -20,6 +20,13 @@ var _scan_count := 0
 var _hero: HeroData = null
 var _cards: Array = []
 var _diff_btns: Array = []
+## ONLINE matchmaking (Phase 5 v1, lobby prototype - see docs/NETWORKING D12).
+var _lob: LobbyClient = null
+var _lob_region_btn: Button = null
+var _lob_status: Label = null
+var _lob_play_btn: Button = null
+var _lob_region_idx := 0
+var _lob_in_queue := false
 
 func _ready() -> void:
 	_hero = HeroRegistry.default_hero()
@@ -38,6 +45,9 @@ func _process(_delta: float) -> void:
 		_scanner.pump()
 
 func _unhandled_input(event: InputEvent) -> void:
+	# While queued for online, ENTER/SPACE must not launch an offline match.
+	if _lob_in_queue:
+		return
 	if event is InputEventKey and event.pressed and not event.echo:
 		if event.keycode == KEY_ENTER or event.keycode == KEY_SPACE or event.keycode == KEY_KP_ENTER:
 			_deploy()
@@ -129,6 +139,7 @@ func _build() -> void:
 	_make_practice(vp)
 	_make_join_row(vp)
 	_make_difficulty_row(vp)
+	_make_online_row(vp)
 
 func _draw_card(c: Control, hd: HeroData) -> void:
 	var selected := hd == _hero
@@ -355,3 +366,100 @@ func _draw_diff(c: Control) -> void:
 	var txt: String = String(c.get_meta("diff_short"))
 	var sz := f.get_string_size(txt, HORIZONTAL_ALIGNMENT_CENTER, r.size.x, 14, 14)
 	c.draw_string(f, Vector2(r.position.x + (r.size.x - sz.x) * 0.5, r.position.y + r.size.y * 0.5 + sz.y * 0.35), txt, HORIZONTAL_ALIGNMENT_LEFT, r.size.x, 14, Color(0.95, 0.97, 1.0))
+## ONLINE matchmaking row (Phase 5 v1, lobby prototype - docs/NETWORKING, D12).
+## Compact panel in the bottom-left, clear of the centered DEPLOY / join /
+## difficulty rows. Region cycles the LATAM-first table; PLAY joins the queue
+## and auto-joins the assigned game server (net_deployed).
+func _make_online_row(vp: Vector2) -> void:
+	var panel_x := 12.0
+	var panel_w := 252.0
+	var row_y := vp.y - 118.0
+	var row_h := 28.0
+	_lob_region_btn = Button.new()
+	_lob_region_btn.text = "REGION  " + Regions.display(str(Regions.all()[0].code))
+	_lob_region_btn.position = Vector2(panel_x, row_y)
+	_lob_region_btn.size = Vector2(panel_w, row_h)
+	_lob_region_btn.add_theme_font_size_override("font_size", 11)
+	_lob_region_btn.pressed.connect(_cycle_region)
+	add_child(_lob_region_btn)
+	_lob_status = Label.new()
+	_lob_status.text = "connecting…"
+	_lob_status.position = Vector2(panel_x, row_y + row_h + 2.0)
+	_lob_status.size = Vector2(panel_w, 18.0)
+	_lob_status.add_theme_font_size_override("font_size", 11)
+	_lob_status.modulate = Color(0.7, 0.78, 0.9)
+	add_child(_lob_status)
+	_lob_play_btn = Button.new()
+	_lob_play_btn.text = "PLAY"
+	_lob_play_btn.position = Vector2(panel_x, row_y + row_h + 24.0)
+	_lob_play_btn.size = Vector2(panel_w, 30.0)
+	_lob_play_btn.add_theme_font_size_override("font_size", 13)
+	_lob_play_btn.pressed.connect(_on_play_online)
+	add_child(_lob_play_btn)
+	_setup_lobby()
+
+## Lobby address: the emulator reaches the host via 10.0.2.2 (NAT); desktop /
+## dev via loopback. Documented prototype heuristic (D12) - not user-configurable yet.
+func _setup_lobby() -> void:
+	var host := "10.0.2.2" if OS.has_feature("android") else "127.0.0.1"
+	_lob = LobbyClient.new()
+	_lob.connected_ok.connect(_on_lob_connected)
+	_lob.disconnected.connect(_on_lob_disconnected)
+	_lob.hello.connect(_on_lob_hello)
+	_lob.pong.connect(_on_lob_pong)
+	_lob.queue.connect(_on_lob_queue)
+	_lob.assign.connect(_on_lob_assign)
+	add_child(_lob)
+	_lob.setup(host, MatchConfig.lobby_port)
+
+func _cycle_region() -> void:
+	_lob_region_idx = (_lob_region_idx + 1) % Regions.all().size()
+	var code: String = str(Regions.all()[_lob_region_idx].code)
+	_lob_region_btn.text = "REGION  " + Regions.display(code)
+
+func _on_lob_connected() -> void:
+	if not _lob_in_queue:
+		_lob_status.text = "lobby online"
+		_lob_status.modulate = Color(0.55, 0.85, 0.55)
+
+func _on_lob_disconnected() -> void:
+	if not _lob_in_queue:
+		_lob_status.text = "lobby offline"
+		_lob_status.modulate = Color(0.9, 0.55, 0.5)
+
+func _on_lob_hello(_info: Dictionary) -> void:
+	# v1: hello carries region + open-match/waiter counts; the queue messages
+	# already surface what the player needs, so nothing to render yet.
+	pass
+
+func _on_lob_pong(rtt_ms: float) -> void:
+	if _lob_in_queue:
+		return
+	_lob_status.text = "lobby  %d ms" % int(rtt_ms)
+	_lob_status.modulate = Color(0.7, 0.78, 0.9)
+
+func _on_lob_queue(info: Dictionary) -> void:
+	var waited: int = int(info.get("waited", 0.0))
+	_lob_status.text = "queue %d:%02d  stage %d" % [waited / 60, waited % 60, int(info.get("stage", 1))]
+	_lob_status.modulate = Color(0.95, 0.8, 0.4)
+	_lob_play_btn.text = "WAITING…"
+
+func _on_lob_assign(info: Dictionary) -> void:
+	_lob_in_queue = false
+	var host_port := str(info.get("host")) + ":" + str(info.get("port"))
+	_lob_status.text = "joining " + host_port
+	_lob_play_btn.text = "PLAY"
+	if _hero != null:
+		net_deployed.emit(host_port, _hero)
+
+func _on_play_online() -> void:
+	if _lob_in_queue:
+		return
+	if _hero == null:
+		return
+	_lob_in_queue = true
+	var code: String = str(Regions.all()[_lob_region_idx].code)
+	_lob.join_queue(code, 1, 0, "P1")
+	_lob_status.text = "joining queue…"
+	_lob_status.modulate = Color(0.95, 0.8, 0.4)
+	_lob_play_btn.text = "WAITING…"

@@ -18,6 +18,9 @@ var net_port := 7777
 ## LAN discovery port (Phase 5, UDP ping/reply; separate from the ENet game
 ## port, which owns UDP on net_port).
 var net_discovery_port := 7778
+## Lobby / matchmaking port (Phase 5 v1, UDP JSON-lines; see docs/NETWORKING).
+## The lobby runs as a separate headless process (net/lobby.tscn).
+var lobby_port := 7790
 
 ## Net v1.1 (Phase 5): client prediction for the local player. The client
 ## steps its own character through the same controller interface and
