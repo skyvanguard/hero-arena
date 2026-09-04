@@ -80,11 +80,11 @@
 
 ## 5. Phase 5 — Multiplayer
 
-- [x] Dedicated headless match server (same codebase; 60 Hz fixed step) — net/server.tscn headless, --port=N, bot pre-fill; session tokens with the reconnect round
-- [~] Net layer v1: **shipped (round 9): 20 Hz snapshots (unreliable) + reliable events + 100 ms interpolation + own wire codec** (docs/NETWORKING.md); client prediction + reconciliation + lag compensation (100–200 ms window) = next net round
-- [ ] Reconnect (drop/resume mid-match)
-- [ ] Server-authority property tests (client lies rejected: damage, ammo, cooldown, movement)
-- [ ] Net-sim harness: latency (50/150/300 ms) + packet loss (2/10%) profiles
+- [x] Dedicated headless match server (same codebase; 60 Hz fixed step) — net/server.tscn headless, --port=N, bot pre-fill; input sanitization + seq gate + session tokens (v1.1)
+- [x] Net layer v1: **shipped (round 9): 20 Hz snapshots (unreliable) + reliable events + 100 ms interpolation + own wire codec** (docs/NETWORKING.md); **v1.1 (round 10): client prediction + reconciliation (hard-snap > 0.35 m) + server lag-comp hitscan (200 ms analytic rewind window)**
+- [x] Reconnect (drop/resume mid-match) — server slot freeze + token reattach (same CharacterEntity), client bounded retry (6x0.5 s); net-sim verified (test_net_sim drop, re-hello, same instance)
+- [x] Server-authority property tests (client lies rejected: damage, ammo, cooldown, movement) — tests/test_net_props.gd, 20 checks (move/aim clamps, u16 wrap-aware seq gate + stale-edge rejection, ammo floor, shot-event parity, lag-comp geometry, server-side reattach)
+- [~] Net-sim harness: **SimLink shipped (round 10)** — per-direction latency/loss + drop_all; 150 ms RTT + 2% loss full-stack suite green (test_net_sim, 10 checks); 50/300 ms + 10% loss profiles = later round
 - [~] **LAN play first** per directive §21 — **direct connect shipped** (host:port field in hero-select, emulator-verified join); local discovery (mDNS/broadcast) = later round
 - [ ] Internet play (region table, ping display, Region/Ping/Server in UI)
 - [ ] Matchmaking prototype: party-aware queue with the 4-stage strategy (strict → widen skill → widen region → bot fill) + match-found transparency panel (directive §16/§17)
@@ -92,7 +92,7 @@
 
 **Exit criteria:** two phones on the same LAN play 3v3 with bots filling; then over the internet with bot fill at 60 s; drops/reconnects survive; property tests green.
 
-**Status: IN PROGRESS (round 9).** Net v1 foundation shipped: ENet transport via Godot 4.7 SceneMultiplayer (RefCounted API: set_root_path + manual poll — NETWORKING.md §1), dedicated headless server scene, own wire codec (hello/slot/input/snapshot/events, 20 Hz both ways), NetPlayerController (humans = server-side controllers, same interface as bots), LAN direct-connect UI, client view interpolation with physics-invisible views, and a 10-check in-process loopback suite — **169/169 headless checks green** (159 prior + 10 net). Two subtle bugs found by the loopback suite and fixed: (1) client views shared the process physics space and blocked the bots’ LOS rays / pushed server characters (views now physics-invisible); (2) team-full check counted bots instead of humans (team pick now by human count). Remaining for exit: prediction + reconciliation + lag comp, reconnect (session tokens), LAN discovery, net-sim harness + server-authority property tests, internet play + matchmaking prototype, docker server ops.
+**Status: IN PROGRESS (round 10).** **Net v1.1 shipped:** server input sanitization + wrap-aware seq gate (move/aim clamps, stale frames and stale edges dropped), session-token reconnect (slot freeze, token re-hello, same CharacterEntity; client bounded retry), **World lag-comp hitscan** (60 Hz pose history, 200 ms analytic 3-sphere rewind; weapons now share the single world.hitscan() truth, rays include walls), **client prediction** (private world + twin driven by the real NetPlayerController from the same 20 Hz samples; hard-snap reconciliation above 0.35 m; own view follows the twin), and the **SimLink** net-sim transport (per-direction latency/loss) with a 150 ms RTT + 2% loss full-stack suite. Three net suites + loopback: **199/199 headless checks green, 0 script errors**. Three subtle bugs found by the new suites and fixed: (1) two exactly-coincident capsules push each other up at about 66 m/s in 4.7 — a human could spawn on the live bot at its spawn point (server now yields the bot AT the spawn, immediate free); (2) a freed shooter left in a live projectile aborted snapshot packing (guard added); (3) the reattach test flaked when the match ended first (test world score cap raised). Remaining for exit: LAN discovery, internet play + matchmaking prototype, docker server ops + 2-core budget, more latency/loss profiles.
 
 ## 6. Phase 6 — First Complete Match (FIRST MAJOR MILESTONE)
 
