@@ -234,10 +234,19 @@ Dispatch is by first magic byte, channel-independent:
   resolutions; results overlays were per-side correct (team-0 device
   VICTORY 15-8, team-1 device DEFEAT 8-15 local-team-first); 0 script errors
   on both devices and the server; PSS ~149-152 MB each. The emulator NAT only
-  reaches the UNICAST discovery leg (broadcasts do not cross it) — the
-  broadcast leg awaits a real WiFi LAN. Verification also caught and fixed
-  two bugs (results-overlay team-0 assumption; respawn lambda capturing a
-  freed character — see ROADMAP round 12).
+  reaches the UNICAST discovery leg (broadcasts do not cross it). Verification
+  also caught and fixed two bugs (results-overlay team-0 assumption; respawn
+  lambda capturing a freed character — see ROADMAP round 12).
+- **Broadcast leg verified (round 28, host proxy for real WiFi):** the
+  emulator-NAT limitation above meant the BROADCAST half of discovery had
+  never been exercised. On the dev host (real /24 NIC, 192.168.100.92/24):
+  a `--network host` docker server (same `heroarena/server` image) + a
+  broadcast-only scanner (255.255.255.255:7778, no unicast hint) found the
+  server (`state=0 OPEN`), and an ENet client joined through the LAN IP
+  (slot assign + 20 Hz snapshot stream — server-side seq delta over 10 s
+  matched the client count exactly, so the pacing is server-confirmed). This
+  is the strongest broadcast-leg evidence available without two physical
+  phones; the real-WiFi two-phone sign-off remains the acceptance test.
 - Full battery: 12 headless suites, 247 checks (10 pre-lobby suites at 205 +
   test_lobby 12 (round 13) + test_net_profiles 30 (round 28)).
 
