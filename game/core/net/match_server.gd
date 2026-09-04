@@ -11,8 +11,16 @@ var world: World
 var port := 7777
 var team_size := 3
 var mp: SceneMultiplayer
-## peer_id -> {ch, input, team, hero_id}
+## peer_id -> {ch, input, team, hero_id, token, last_seq, delay}
 var slots: Dictionary = {}
+## token -> {ch, team, hero_id}: slots frozen on disconnect. A re-hello
+## carrying the same token reattaches to the same character (Phase 5
+## reconnect); a fresh join may still yield a bot behind it.
+var _frozen: Dictionary = {}
+## Net-sim transport (Phase 5): when set, send/recv bypass ENet entirely.
+## sim_out carries this endpoint's latency/loss; sim_in is polled in tick().
+var sim_out: SimLink = null
+var sim_in: SimLink = null
 ## CharacterEntity -> stable match id (0..MAX_CHARS-1)
 var char_ids: Dictionary = {}
 var next_id := 0
@@ -30,6 +38,8 @@ func setup(w: World, p: int, ts: int) -> void:
 	team_size = ts
 	if is_inside_tree():
 		_start()
+	if world != null and MatchConfig != null:
+		world.lag_comp_window = MatchConfig.lag_comp_window
 
 func _ready() -> void:
 	_start()
@@ -43,38 +53,51 @@ func _start() -> void:
 	# 4.7: SceneMultiplayer is a RefCounted MultiplayerAPI (not a Node) and
 	# needs a root path in the tree + explicit poll() calls.
 	mp.set_root_path(get_path())
-	var peer := ENetMultiplayerPeer.new()
-	var err := peer.create_server(port, 8)
-	if err != OK:
-		push_error("MatchServer: create_server(%d) failed: %d" % [port, err])
-	mp.multiplayer_peer = peer
-	mp.peer_connected.connect(_on_peer_connected)
-	mp.peer_disconnected.connect(_on_peer_disconnected)
-	mp.peer_packet.connect(_on_peer_packet)
+	if sim_out == null:
+		var peer := ENetMultiplayerPeer.new()
+		var err := peer.create_server(port, 8)
+		if err != OK:
+			push_error("MatchServer: create_server(%d) failed: %d" % [port, err])
+		mp.multiplayer_peer = peer
+		mp.peer_connected.connect(_on_peer_connected)
+		mp.peer_disconnected.connect(_on_peer_disconnected)
+		mp.peer_packet.connect(_on_peer_packet)
 	world.world_event.connect(_on_world_event)
-	print("SERVER listening on port %d (team size %d)" % [port, team_size])
+	var tag := " (sim transport)" if sim_out != null else ""
+	print("SERVER listening on port %d (team size %d)" % [port, team_size] + tag)
 
 func _on_peer_connected(id: int) -> void:
 	print("SERVER peer %d connected (awaiting hello)" % id)
 
 func _on_peer_disconnected(id: int) -> void:
-	# v1: the slot freezes in place (controller removed); reconnect lands in
-	# a later Phase 5 round and will replace the frozen slot with a bot.
+	# The slot FREEZES in place: the body stays (controller removed, so no
+	# stale input), and its token lets the peer reattach via a token hello.
 	var s: Dictionary = slots.get(id, {})
 	var ch: CharacterEntity = s.get("ch", null)
 	if ch != null and is_instance_valid(ch):
 		ch.controller = null
+		ch.net_comp_delay = 0.0
 		if s.has('team'):
 			team_humans[int(s.team)] = maxi(0, int(team_humans[int(s.team)]) - 1)
+		if s.has("token"):
+			_frozen[int(s.token)] = {ch = ch, team = int(s.team),
+				hero_id = str(s.hero_id)}
+		if s.has("input"):
+			var inp: NetInput = s.input
+			inp.fire = false
+			inp.move = Vector2.ZERO
 	slots.erase(id)
 	print("SERVER peer %d disconnected" % id)
 
 ## Call from the server scene after world.step(): poll the transport
 ## (peer_packet delivers) and emit snapshots at 20 Hz.
 func tick(dt: float) -> void:
-	var n := 0
-	while mp.poll() == OK and n < 64:
-		n += 1
+	if sim_in != null:
+		sim_in.poll()
+	else:
+		var n := 0
+		while mp.poll() == OK and n < 64:
+			n += 1
 	_snap_acc += dt
 	if _snap_acc >= _snap_interval:
 		_snap_acc = fmod(_snap_acc, _snap_interval)
@@ -90,10 +113,17 @@ func _on_peer_packet(id: int, buf: PackedByteArray) -> void:
 		_on_input(id, buf)
 
 func _on_hello(from: int, d: Dictionary) -> void:
+	var session := int(d.get("session", 0))
+	if session != 0 and _frozen.has(session) and not world.match_over:
+		if _reattach(from, session):
+			return
+		# Slot died in the meantime (e.g. yielded to a fresh join): fall
+		# through to a fresh join.
 	var hero_data: HeroData = HeroRegistry.by_id(str(d.hero_id))
 	if hero_data == null:
 		hero_data = HeroRegistry.default_hero()
-	# V1 team pick: join the side with fewer HUMANS (bots are replaceable).
+	# Team pick: side with fewer HUMANS (bots replaceable; frozen slots do
+	# not count - a returning owner re-claims its spot).
 	var team := 0 if team_humans[0] <= team_humans[1] else 1
 	if team_humans[team] >= team_size:
 		_send_to(from, NetProtocol.pack_slot(-1, 0, 0, team_size, world.time,
@@ -108,7 +138,26 @@ func _on_hello(from: int, d: Dictionary) -> void:
 	else:
 		spawn = Vector3(16.0 if team == 0 else -16.0, 0.9, 0.0)
 	if team_chars[team].size() >= team_size:
-		_free_character(team_chars[team].back())
+		# Yield a spot: PREFER the bot standing at the spawn point itself -
+		# spawning a human exactly coincident with a live bot makes the two
+		# capsules push each other straight up at ~66 m/s (Godot 4.7 resolves
+		# exact overlaps vertically; verified by probe). A live body must
+		# never share a spawn. A frozen human's slot is only taken when no
+		# bot can yield (its token is invalidated either way).
+		var to_free: CharacterEntity = null
+		for c in team_chars[team]:
+			if c != null and is_instance_valid(c) and not _is_frozen(c) 					and (c.global_position - spawn).length() < 0.5:
+				to_free = c
+				break
+		if to_free == null:
+			for i in range(team_chars[team].size() - 1, -1, -1):
+				var c: CharacterEntity = team_chars[team][i]
+				if not _is_frozen(c):
+					to_free = c
+					break
+		if to_free == null and team_chars[team].size() > 0:
+			to_free = team_chars[team].back()
+		_free_character(to_free)
 	var ch := _spawn_character(team, hero_data, spawn, true)
 	var inp := NetInput.new()
 	var nc := NetPlayerController.new()
@@ -117,18 +166,42 @@ func _on_hello(from: int, d: Dictionary) -> void:
 	nc.input = inp
 	ch.controller = nc
 	team_humans[team] += 1
-	slots[from] = {ch = ch, input = inp, team = team, hero_id = hero_data.id}
+	var token := randi_range(1, 0x7FFFFFFE)
+	slots[from] = {ch = ch, input = inp, team = team, hero_id = hero_data.id,
+		token = token, last_seq = -1, delay = 0.0}
 	print("SERVER peer %d -> %s slot %d team %d" % [from, hero_data.id, int(char_ids[ch]), team])
 	_send_to(from, NetProtocol.pack_slot(0, int(char_ids[ch]), team, team_size,
-			world.time, world.target_score, world.match_duration))
+			world.time, world.target_score, world.match_duration, token))
 
 func _on_input(from: int, buf: PackedByteArray) -> void:
 	var s: Dictionary = slots.get(from, {})
 	if s.is_empty():
 		return
-	var inp: NetInput = s.input
 	var d: Dictionary = NetProtocol.unpack_input(buf)
-	inp.apply(d)
+	# Seq gate (u16, wrap-aware): stale or replayed frames must not clobber
+	# state (property tests: "client lies rejected").
+	var diff := (int(d.seq) - int(s.last_seq) + 32768) % 65536 - 32768
+	if diff <= 0:
+		return
+	s.last_seq = int(d.seq)
+	var inp: NetInput = s.input
+	inp.seq = int(d.seq)
+	# Server clamps everything the client claims (move magnitude, aim bounds).
+	inp.move = (d.move as Vector2).limit_length(1.0)
+	inp.yaw = wrapf(float(d.yaw), -PI, PI)
+	inp.pitch = clampf(float(d.pitch), -1.25, 0.9)
+	inp.fire = bool(d.fire)
+	inp.edges |= int(d.edges)
+	# Latency measurement: the client tags each input with its estimate of
+	# server time; the age is the one-way delay, clamped to the lag-comp
+	# window. Drives World.hitscan rewind for this shooter.
+	var te := float(d.get("time_est", 0.0))
+	if te > 0.0:
+		var dl := clampf(world.time - te, 0.0, world.lag_comp_window)
+		s.delay = dl
+		var ch: CharacterEntity = s.ch
+		if ch != null and is_instance_valid(ch):
+			ch.net_comp_delay = dl
 
 ## Creates a character in world with a stable id; humans get a
 ## NetPlayerController attached by the caller, bots by spawn_bot.
@@ -156,13 +229,51 @@ func spawn_bot(team: int, hero_data: HeroData, spawn: Vector3) -> Hero:
 	ch.controller = bc
 	return ch
 
+func _is_frozen(ch: CharacterEntity) -> bool:
+	for f in _frozen.values():
+		if f.get("ch", null) == ch:
+			return true
+	return false
+
+func _invalidates_frozen(ch: CharacterEntity) -> void:
+	for k in _frozen.keys():
+		if (_frozen[k] as Dictionary).get("ch", null) == ch:
+			_frozen.erase(k)
+
+## Token reattach: re-home the frozen character to the returning peer.
+func _reattach(from: int, token: int) -> bool:
+	var f: Dictionary = _frozen[token]
+	_frozen.erase(token)
+	var ch: CharacterEntity = f.get("ch", null)
+	if ch == null or not is_instance_valid(ch):
+		return false
+	var inp := NetInput.new()
+	var nc := NetPlayerController.new()
+	ch.add_child(nc)
+	nc.setup(ch, null, world, null)
+	nc.input = inp
+	ch.controller = nc
+	ch.net_comp_delay = 0.0
+	team_humans[int(f.team)] += 1
+	slots[from] = {ch = ch, input = inp, team = int(f.team),
+		hero_id = str(f.hero_id), token = token, last_seq = -1, delay = 0.0}
+	print("SERVER peer %d reattached (token %d) -> slot %d team %d" % [from, token,
+		int(char_ids.get(ch, -1)), int(f.team)])
+	_send_to(from, NetProtocol.pack_slot(0, int(char_ids.get(ch, 0)), int(f.team),
+			team_size, world.time, world.target_score, world.match_duration, token))
+	return true
+
 func _free_character(ch: CharacterEntity) -> void:
 	if ch == null or not is_instance_valid(ch):
 		return
+	_invalidates_frozen(ch)
 	world.unregister_character(ch)
 	team_chars[int(ch.team)].erase(ch)
 	char_ids.erase(ch)
-	ch.queue_free()
+	# Immediate free (not queue_free): a yielding bot must leave its
+	# spawn before the human is placed there - a frame of exact overlap
+	# pushes the fresh human up ~1 m on join (Godot 4.7 overlap MTV).
+	ch.free()
 
 func _id_of(ch: CharacterEntity) -> int:
 	if ch == null:
@@ -188,13 +299,15 @@ func _send_snapshot() -> void:
 	for pr in world.projectiles:
 		if projs.size() >= NetProtocol.MAX_PROJS:
 			break
+		if not is_instance_valid(pr.shooter):
+			continue  # shooter was freed (bot yield); the projectile expires soon
 		projs.append({owner = _id_of(pr.shooter), pos = pr.global_position,
 				dir = pr.dir.normalized()})
 	var buf := NetProtocol.pack_snapshot(_snap_seq, world.time,
 			int(world.score.get(0, 0)), int(world.score.get(1, 0)), world.winner,
 			chars, projs)
 	_snap_seq = (_snap_seq + 1) % 65536
-	mp.send_bytes(buf, 0, MultiplayerPeer.TRANSFER_MODE_UNRELIABLE, NetProtocol.CH_UNRELIABLE)
+	_tx(0, buf, MultiplayerPeer.TRANSFER_MODE_UNRELIABLE, NetProtocol.CH_UNRELIABLE)
 
 func _on_world_event(name: String, data: Dictionary) -> void:
 	var buf: PackedByteArray
@@ -224,11 +337,18 @@ func _on_world_event(name: String, data: Dictionary) -> void:
 	_send_all(buf)
 
 func _send_all(buf: PackedByteArray) -> void:
-	mp.send_bytes(buf, 0, MultiplayerPeer.TRANSFER_MODE_RELIABLE, NetProtocol.CH_RELIABLE)
+	_tx(0, buf, MultiplayerPeer.TRANSFER_MODE_RELIABLE, NetProtocol.CH_RELIABLE)
 
 func _send_to(id: int, buf: PackedByteArray) -> void:
-	mp.send_bytes(buf, id, MultiplayerPeer.TRANSFER_MODE_RELIABLE, NetProtocol.CH_RELIABLE)
+	_tx(id, buf, MultiplayerPeer.TRANSFER_MODE_RELIABLE, NetProtocol.CH_RELIABLE)
+
+## Transport boundary: ENet, or the net-sim link when one is wired.
+func _tx(id: int, buf: PackedByteArray, mode: int, ch: int) -> void:
+	if sim_out != null:
+		sim_out.send(id, buf, mode, ch)
+	elif mp != null:
+		mp.send_bytes(buf, id, mode, ch)
 
 func exit() -> void:
-	if mp != null:
+	if mp != null and mp.multiplayer_peer != null:
 		mp.multiplayer_peer.close()

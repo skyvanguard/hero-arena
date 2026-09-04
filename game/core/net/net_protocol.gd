@@ -91,6 +91,12 @@ static func read_u8(p: PackedByteArray, o: int) -> int:
 static func read_u16(p: PackedByteArray, o: int) -> int:
 	return p[o] | (p[o + 1] << 8)
 
+static func u32(v: int) -> PackedByteArray:
+	return PackedByteArray([v & 0xFF, (v >> 8) & 0xFF, (v >> 16) & 0xFF, (v >> 24) & 0xFF])
+
+static func read_u32(p: PackedByteArray, o: int) -> int:
+	return p[o] | (p[o + 1] << 8) | (p[o + 2] << 16) | (p[o + 3] << 24)
+
 static func read_str(p: PackedByteArray, o: int) -> String:
 	var n := read_u16(p, o)
 	var s := p.slice(o + 2, o + 2 + n).get_string_from_utf8()
@@ -98,23 +104,31 @@ static func read_str(p: PackedByteArray, o: int) -> String:
 
 # ---- messages ----
 
-## hello: client -> server (reliable). hero_id is the pick from the select.
-static func pack_hello(team_size: int, hero_id: String) -> PackedByteArray:
-	var b := u8(M_HELLO) + u8(team_size) + s_bytes(hero_id)
+## hello: client -> server (reliable). hero_id is the pick from the select;
+## session = 0 for a fresh join, or the slot token from M_SLOT to reconnect
+## to a frozen slot (Phase 5 reconnect).
+static func pack_hello(team_size: int, hero_id: String, session: int = 0) -> PackedByteArray:
+	var b := u8(M_HELLO) + u8(team_size) + s_bytes(hero_id) + u32(session)
 	return b
 
 static func unpack_hello(p: PackedByteArray) -> Dictionary:
 	var o := 1
 	var ts := read_u8(p, o); o += 1
 	var hid := read_str(p, o)
-	return {"team_size": ts, "hero_id": hid}
+	o += hid.to_utf8_buffer().size() + 2
+	var session := 0
+	if p.size() >= o + 4:
+		session = read_u32(p, o)
+	return {"team_size": ts, "hero_id": hid, "session": session}
 
-## slot: server -> client (reliable). result 0 = accepted, -1 = team full.
-## Carries pacing values (target_score, match_duration) for the client HUD.
+## slot: server -> client (reliable). result 0 = accepted, -1 = team full,
+## -2 = match already over. Carries pacing values (target_score,
+## match_duration) for the client HUD + the session token (M_HELLO.session
+## on reconnect keeps the frozen slot).
 static func pack_slot(result: int, ch_id: int, team: int, team_size: int,
-		time: float, target_score: int, match_duration: float) -> PackedByteArray:
+		time: float, target_score: int, match_duration: float, token: int = 0) -> PackedByteArray:
 	var b := u8(M_SLOT) + i8(result) + u8(ch_id) + u8(team) + u8(team_size)
-	b += f32(time) + u8(target_score) + f32(match_duration)
+	b += f32(time) + u8(target_score) + f32(match_duration) + u32(token)
 	return b
 
 static func unpack_slot(p: PackedByteArray) -> Dictionary:
@@ -127,15 +141,21 @@ static func unpack_slot(p: PackedByteArray) -> Dictionary:
 	var ts := read_u8(p, o); o += 1
 	var t := _f32_at(p, o); o += 4
 	var target := read_u8(p, o); o += 1
-	var dur := _f32_at(p, o)
+	var dur := _f32_at(p, o); o += 4
+	var token := 0
+	if p.size() >= o + 4:
+		token = read_u32(p, o)
 	return {"result": r, "ch_id": ch, "team": team, "team_size": ts, "time": t,
-			"target_score": target, "match_duration": dur}
+			"target_score": target, "match_duration": dur, "token": token}
 
 ## input: client -> server (unreliable), INPUT_HZ.
 ## edges bitfield: 1 jump, 2 reload, 4 ability1, 8 ability2, 16 ultimate.
+## time_est = the client's estimate of current server time (s); the server
+## measures one-way latency from it and drives lag compensation.
 static func pack_input(seq: int, move: Vector2, yaw: float, pitch: float,
-		fire: bool, edges: int) -> PackedByteArray:
+		fire: bool, edges: int, time_est: float = 0.0) -> PackedByteArray:
 	var b := u8(M_INPUT) + u16(seq) + f32s([move.x, move.y, yaw, pitch]) + u8(1 if fire else 0) + u8(edges)
+	b += f32(time_est)
 	return b
 
 static func unpack_input(p: PackedByteArray) -> Dictionary:
@@ -146,9 +166,12 @@ static func unpack_input(p: PackedByteArray) -> Dictionary:
 	var yaw := _f32_at(p, o); o += 4
 	var pitch := _f32_at(p, o); o += 4
 	var fire := read_u8(p, o) != 0; o += 1
-	var edges := read_u8(p, o)
+	var edges := read_u8(p, o); o += 1
+	var te := 0.0
+	if p.size() >= o + 4:
+		te = _f32_at(p, o)
 	return {"seq": seq, "move": Vector2(mx, my), "yaw": yaw, "pitch": pitch,
-			"fire": fire, "edges": edges}
+			"fire": fire, "edges": edges, "time_est": te}
 
 ## snapshot: server -> all clients (unreliable), SNAPSHOT_HZ.
 ## char dict: {id, team, alive, hero_idx, pos(Vector3), rot_y, hp, max_hp}
