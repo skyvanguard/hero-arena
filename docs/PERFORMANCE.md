@@ -94,6 +94,26 @@ is not a device signal — see the real-device table below.
 |---|---|---|---|---|---|
 | _pending_ | — | mobile | — | — | Phase 1 gate: first real low-end Android ≥ 30 FPS |
 
+### 2026-09-04 — dedicated server, 2-core budget (Phase 5, round 27)
+
+Workload: `server/Dockerfile` image (Godot 4.7.2 headless, import cache
+baked), full **3v3 bot match** (6 entities, AI + 60 Hz fixed physics + arena
+collision), container CPU-capped with `--cpuset-cpus="0,1"` (hard 2-core
+affinity). Measurement host: 80-core/256 GB Linux (docker 29.7), so the
+cap is the only constraint — closer to a 2-core VPS than the host is.
+
+| Metric | Result |
+|---|---|
+| CPU, pure bot match, 60 s | **11.6 CPU-s / 60 s = ~0.19 cores** (~10% of the 2-core budget) |
+| Sim pacing (world.time / real time, 2 samples) | **1.0000** (8.333 s in 8.331 s; 8.333 s in 8.333 s) — 60 Hz step holds |
+| Snapshot pacing, 10 s client through published ports | **199/200 (19.9 Hz)** target 20 Hz, 0 sustained loss; 182 combat events in the same window |
+| Full bot match to completion | Yes (discovery state -> OVER; no step drift, no crash) |
+
+Interpretation: the authoritative server clears the 2-core budget with
+>90% headroom at 3v3 scale; 6v6 (2x entities) is the scaling risk to re-
+measure when team-size variety lands. Image: ~119 MB compressed / ~377 MB
+uncompressed (the Godot binary dominates).
+
 ## Known environment notes
 
 - Headless emulators (no window / no KVM-gpu) can fail Vulkan present with

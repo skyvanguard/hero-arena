@@ -1,0 +1,10 @@
+# Docker build context pruning (context = repo root, see server/Dockerfile).
+.git
+docs
+game/build
+game/.godot
+game/export_presets.cfg
+server/out
+*.apk
+*.aab
+*.tmp

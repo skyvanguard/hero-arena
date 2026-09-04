@@ -322,6 +322,14 @@ gameplay balance — the magic-number rule's infra exception).
 - The lobby is a separate headless process:
   lobby.tscn -- --port=7790 --region=latam_saopaulo --fill=60. The game
   server is unchanged except registration + state broadcast.
+- **Dedicated server image (round 27):** `server/Dockerfile` (repo-root build
+  context) ships the pinned Godot 4.7.2 binary + `game/` project with the
+  import cache baked in; `docker run -d --cpuset-cpus="0,1" -p 7777:7777/udp
+  -p 7778:7778/udp heroarena/server` starts a 3v3 server (ENet 7777/udp +
+  discovery 7778/udp). Bridge networking is fine (verified: discovery reply
+  + ENet handshake + 20 Hz snapshot stream through the published ports from
+  the host); `--network host` also works if you want no port mapping.
+  2-core budget: docs/PERFORMANCE.md (round 27 section).
 
 ### 9.5 v1 tradeoffs (explicit)
 
