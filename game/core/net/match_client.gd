@@ -1,18 +1,27 @@
 class_name MatchClient
 extends Node
-## LAN match client (Phase 5 v1, ARCHITECTURE §3.1): joins a MatchServer via
-## ENet (Godot 4.7 SceneMultiplayer API), sends 20 Hz input frames (absolute
-## camera yaw/pitch + edges), renders ALL characters from interpolated
-## snapshots (100 ms delay ring), drives a local camera for the player slot.
-## No client prediction yet (later Phase 5 round) - at LAN latency the
-## interpolation delay masks the round trip.
+## LAN match client (Phase 5 v1.1, ARCHITECTURE §3.1): joins a MatchServer
+## via ENet (Godot 4.7 SceneMultiplayer API), sends 20 Hz input frames
+## (absolute camera yaw/pitch + edges + server-time estimate for lag-comp),
+## renders remote characters from interpolated snapshots (100 ms delay ring)
+## and the LOCAL character from client prediction (same controller
+## interface as the server; reconciled against snapshots). Drop/reconnect:
+## auto re-hello with the slot token (server freezes the slot, reattaches).
 signal ended(winner: int, score: Array, wtime: float, lost: bool, title: String)
+const MAX_RECONNECTS := 6
+const PRED_STEP := 1.0 / 60.0
+## Reconcile threshold: prediction vs server state (m). Above it the
+## predicted character hard-snaps to the server (input changes, respawns).
+const PRED_SNAP_DIST := 0.35
 var my_id := -1
 var my_team := 0
 var my_hero_id := ""
 var mp: SceneMultiplayer
 var world: World
 var hud: NetHUD
+## Net-sim transport (Phase 5): when set, send/recv bypass ENet entirely.
+var sim_out: SimLink = null
+var sim_in: SimLink = null
 var _hero_data: HeroData
 var _host := ""
 var _port := 7777
@@ -29,6 +38,22 @@ var _ring_times: Array = []   # parallel server-times
 var _rx_ms := 0
 var _match_duration := 300.0
 var _proj_views: Array = []   # pooled MeshInstance3D (cosmetic)
+var _last_score: Array = [0, 0]
+# Session token from M_SLOT: re-hello carries it to reattach to a frozen slot.
+var _token := 0
+var _reconnects := 0
+var _reconnecting := false
+var _reconnect_acc := 0.0
+# Client prediction (local player): a private World steps a twin character
+# through NetPlayerController (same interface as the server-side humans) so
+# the view is driven by prediction, not interpolation.
+var _pred_on := false
+var _pw: World = null
+var _pch: Hero = null
+var _pnc: NetPlayerController = null
+var _p_in: NetInput = null
+var _pred_acc := 0.0
+var _pred_dead := true
 
 func setup(host_port: String, hero_data: HeroData) -> void:
 	_hero_data = hero_data
@@ -52,39 +77,100 @@ func _start() -> void:
 	# 4.7: SceneMultiplayer is a RefCounted MultiplayerAPI (not a Node) and
 	# needs a root path in the tree + explicit poll() calls.
 	mp.set_root_path(get_path())
+	mp.connected_to_server.connect(_on_connected)
+	mp.connection_failed.connect(_on_conn_failed)
+	mp.server_disconnected.connect(_on_disconnected)
+	mp.peer_packet.connect(_on_peer_packet)
+	if sim_out != null:
+		return  # net-sim harness: the test drives connect/hello manually
 	var peer := ENetMultiplayerPeer.new()
 	var err := peer.create_client(_host, _port)
 	if err != OK:
 		_finish(-1, [0, 0], 0.0, true, "CONNECT FAILED (%d)" % err)
 		return
 	mp.multiplayer_peer = peer
-	mp.connected_to_server.connect(_on_connected)
-	mp.connection_failed.connect(_on_conn_failed)
-	mp.server_disconnected.connect(_on_disconnected)
-	mp.peer_packet.connect(_on_peer_packet)
 
 func _on_connected() -> void:
 	print("CLIENT connected to %s:%d" % [_host, _port])
-	var buf := NetProtocol.pack_hello(MatchConfig.team_size, _hero_data.id)
-	mp.send_bytes(buf, 0, MultiplayerPeer.TRANSFER_MODE_RELIABLE, NetProtocol.CH_RELIABLE)
+	var buf := NetProtocol.pack_hello(MatchConfig.team_size, _hero_data.id, _token)
+	_tx(0, buf, MultiplayerPeer.TRANSFER_MODE_RELIABLE, NetProtocol.CH_RELIABLE)
 
 func _on_conn_failed() -> void:
-	_finish(-1, [0, 0], 0.0, true, "CONNECT FAILED")
+	if _ended:
+		return
+	if _in_match and _reconnects < MAX_RECONNECTS:
+		_begin_reconnect()
+	else:
+		_finish(-1, _last_score, 0.0, true, "CONNECT FAILED")
 
 func _on_disconnected() -> void:
-	if _in_match and not _ended:
-		_finish(-1, [0, 0], 0.0, true, "CONNECTION LOST")
+	if _ended:
+		return
+	if _in_match and _reconnects < MAX_RECONNECTS:
+		_begin_reconnect()
+	else:
+		_finish(-1, _last_score, 0.0, true, "CONNECTION LOST")
+
+## Drop/reconnect (Phase 5): the server froze the slot on its side of the
+## drop; re-dial with the slot token and the server reattaches the same
+## character. Bounded retry, then give up with the last known score.
+func _begin_reconnect() -> void:
+	_reconnecting = true
+	_reconnects += 1
+	_reconnect_acc = 0.0
+	if hud != null:
+		hud.set_state("RECONNECTING %d/%d..." % [_reconnects, MAX_RECONNECTS])
+	if mp != null and mp.multiplayer_peer != null:
+		mp.multiplayer_peer.close()
+		mp.multiplayer_peer = null
+
+func _do_reconnect() -> void:
+	if sim_out != null:
+		# Net-sim harness: the test rewires the link + re-hellos manually.
+		_reconnecting = false
+		return
+	if _host == "":
+		return
+	var peer := ENetMultiplayerPeer.new()
+	var err := peer.create_client(_host, _port)
+	if err != OK:
+		_reconnecting = false
+		_finish(-1, _last_score, 0.0, true, "CONNECTION LOST")
+		return
+	mp.multiplayer_peer = peer
 
 func _process(delta: float) -> void:
-	var n := 0
-	while mp.poll() == OK and n < 64:
-		n += 1
+	if sim_in != null:
+		sim_in.poll()
+	elif mp != null and mp.multiplayer_peer != null:
+		var n := 0
+		while mp.poll() == OK and n < 64:
+			n += 1
+	if _reconnecting and not _ended:
+		_reconnect_acc += delta
+		if _reconnect_acc >= 0.5:
+			_reconnect_acc = 0.0
+			_do_reconnect()
 	if _in_match:
 		_acc += delta
 		while _acc >= _input_interval:
 			_sample_input()
 			_acc -= _input_interval
 		_apply_views()
+
+## Client prediction: step the local twin at 60 Hz (same fixed step as the
+## server) so the predicted path matches the server's integration.
+func _physics_process(delta: float) -> void:
+	if not _pred_on or not _in_match or _pch == null or _pw == null:
+		return
+	if _pred_dead:
+		return
+	_pred_acc += delta
+	var steps := 0
+	while _pred_acc >= PRED_STEP and steps < 4:
+		_pred_acc -= PRED_STEP
+		_pw.step(PRED_STEP)
+		steps += 1
 
 func _on_peer_packet(_id: int, buf: PackedByteArray) -> void:
 	if buf.size() < 2:
@@ -93,12 +179,25 @@ func _on_peer_packet(_id: int, buf: PackedByteArray) -> void:
 	if m == NetProtocol.M_SLOT:
 		var d: Dictionary = NetProtocol.unpack_slot(buf)
 		if int(d.result) != 0:
-			_finish(-1, [0, 0], 0.0, true, "TEAM FULL")
+			if int(d.result) == -2:
+				_finish(-1, _last_score, 0.0, false, "MATCH OVER")
+			else:
+				_finish(-1, _last_score, 0.0, true, "TEAM FULL")
 			return
+		var tk := int(d.get("token", 0))
+		if tk > 0:
+			_token = tk
 		my_id = int(d.ch_id)
 		my_team = int(d.team)
 		_match_duration = float(d.match_duration)
-		_enter()
+		if world == null:
+			_enter()
+		else:
+			# Re-slot after reconnect: keep world/views; the next snapshot
+			# hard-syncs the prediction.
+			_reconnecting = false
+			if hud != null:
+				hud.set_state("IN MATCH  ·  slot %d" % my_id)
 	elif m == NetProtocol.M_SNAPSHOT:
 		_on_snapshot(NetProtocol.unpack_snapshot(buf))
 	elif m == NetProtocol.M_EVENT:
@@ -117,6 +216,14 @@ func _enter() -> void:
 	add_child(hud)
 	hud.my_team = my_team
 	hud.set_state("IN MATCH  ·  slot %d" % my_id)
+	_pred_on = MatchConfig.net_prediction
+	if _pred_on:
+		_pw = World.new()
+		_pw.name = "PredictWorld"
+		add_child(_pw)
+		var parena := Arena.build(_pw)
+		add_child(parena)
+		_p_in = NetInput.new()
 	print("CLIENT slot %d team %d (%s)" % [my_id, my_team, my_hero_id])
 
 func _on_event(d: Dictionary) -> void:
@@ -140,11 +247,85 @@ func _on_snapshot(d: Dictionary) -> void:
 	_rx_ms = Time.get_ticks_msec()
 	if _in_match:
 		var sc: Array = d.score
+		_last_score = [int(sc[0]), int(sc[1])]
 		hud.set_score(int(sc[0]), int(sc[1]))
 		var remaining := int(ceilf(maxf(0.0, _match_duration - float(d.time))))
 		hud.set_time(-1 if int(d.winner) != -1 else remaining)
+		_reconcile(d)
+
+## Current server-time estimate (latest snapshot time + elapsed since RX).
+## Tagged onto every input frame: the server measures one-way latency from
+## it and rewinds targets by that much when validating this client's shots.
+func _est_server_time() -> float:
+	if _ring_times.is_empty():
+		return 0.0
+	var latest_t: float = _ring_times.back()
+	if _rx_ms == 0:
+		return latest_t
+	return latest_t + (Time.get_ticks_msec() - _rx_ms) / 1000.0
+
+## Reconcile the predicted local character against a fresh snapshot:
+## death/respawn always hard-sync; above PRED_SNAP_DIST the prediction
+## snapped (input changes land here - the server saw the old input).
+func _reconcile(d: Dictionary) -> void:
+	if not _pred_on or _pw == null:
+		return
+	var mc: Variant = _find_char(d, my_id)
+	if mc == null:
+		return
+	if not bool(mc.alive):
+		if not _pred_dead:
+			_pred_dead = true
+		return
+	if _pch == null:
+		_ensure_predicted(mc)
+		_pred_dead = false
+		return
+	if _pred_dead:
+		_pred_dead = false
+		_pch.global_position = mc.pos
+		_pch.rotation.y = float(mc.rot_y)
+		_pch.velocity = Vector3.ZERO
+		return
+	var err := (_pch.global_position - (mc.pos as Vector3)).length()
+	if err > PRED_SNAP_DIST:
+		_pch.global_position = mc.pos
+		_pch.rotation.y = float(mc.rot_y)
+		_pch.velocity = Vector3.ZERO
+
+## Create the predicted twin on the first snapshot that carries our state:
+## same controller interface as the server-side human (NetPlayerController),
+## colliding with WORLD geometry only (never characters - the server owns
+## character-vs-character physics), and with all NESTED bodies zeroed (in
+## loopback the twin shares the process physics space with the server world;
+## a stray head-sensor would block server LOS/weapon rays again).
+func _ensure_predicted(c: Dictionary) -> void:
+	_pch = HeroFactory.create(my_team, false, _hero_data.color, _hero_data)
+	_pch.display_name = "You"
+	_pch.collision_layer = 0
+	var stack: Array = [_pch]
+	while stack.size() > 0:
+		var n: Node = stack.pop_back()
+		if n is PhysicsBody3D:
+			(n as PhysicsBody3D).collision_layer = 0
+			(n as PhysicsBody3D).collision_mask = 0
+		for k in n.get_children():
+			stack.append(k)
+	_pch.collision_mask = CharacterEntity.LAYER_WORLD
+	_pch.global_position = c.pos
+	_pch.rotation.y = float(c.rot_y)
+	_pch.hide_visual()  # the VIEW renders; the twin is physics-only
+	_pw.add_child(_pch)
+	_pw.register_character(_pch)
+	_pnc = NetPlayerController.new()
+	_pch.add_child(_pnc)
+	_pnc.setup(_pch, null, _pw, null)
+	_pnc.input = _p_in
+	_pch.controller = _pnc
 
 ## 20 Hz input sample: shared Controls contract + local absolute camera.
+## The SAME frame drives the predicted twin (client-side parity with the
+## server: identical input, identical controller, identical 60 Hz physics).
 func _sample_input() -> void:
 	if my_id < 0:
 		return
@@ -164,10 +345,19 @@ func _sample_input() -> void:
 		edges |= 8
 	if Controls.consume_ultimate():
 		edges |= 16
-	var buf := NetProtocol.pack_input(_seq, Controls.move, _cam_yaw, _cam_pitch,
-			Controls.fire, edges)
+	var move: Vector2 = Controls.move.limit_length(1.0)
+	var buf := NetProtocol.pack_input(_seq, move, _cam_yaw, _cam_pitch,
+			Controls.fire, edges, _est_server_time())
 	_seq = (_seq + 1) % 65536
-	mp.send_bytes(buf, 0, MultiplayerPeer.TRANSFER_MODE_UNRELIABLE, NetProtocol.CH_UNRELIABLE)
+	_tx(0, buf, MultiplayerPeer.TRANSFER_MODE_UNRELIABLE, NetProtocol.CH_UNRELIABLE)
+	if _pred_on and _p_in != null and not _pred_dead:
+		_p_in.move = move
+		_p_in.yaw = _cam_yaw
+		_p_in.pitch = _cam_pitch
+		_p_in.fire = Controls.fire
+		_p_in.edges = edges
+		if _pch != null and _pnc != null:
+			_pnc.input = _p_in
 
 ## Interpolate every character between the two snapshots bracketing
 ## (latest server time - 100 ms) and write the view nodes.
@@ -202,8 +392,13 @@ func _apply_views() -> void:
 		else:
 			pos = c.pos
 			rot_y = float(c.rot_y)
-		view.global_position = pos
-		view.rotation.y = rot_y
+		if int(c.id) == my_id and _pred_on and _pch != null and not _pred_dead:
+			# Local character: prediction drives the view (no 100 ms delay).
+			view.global_position = _pch.global_position
+			view.rotation.y = _pch.rotation.y
+		else:
+			view.global_position = pos
+			view.rotation.y = rot_y
 		if bool(c.alive):
 			view.show_visual()
 		else:
@@ -313,6 +508,17 @@ func _finish(winner: int, score: Array, wtime: float, lost: bool, title: String)
 	print("CLIENT ended: winner=%d score=%s t=%.0f lost=%s %s" % [winner, str(score), wtime, str(lost), title])
 	ended.emit(winner, score, wtime, lost, title)
 
+func _tx(id: int, buf: PackedByteArray, mode: int, ch: int) -> void:
+	if sim_out != null:
+		sim_out.send(id, buf, mode, ch)
+	elif mp != null:
+		mp.send_bytes(buf, id, mode, ch)
+
 func exit() -> void:
+	if _pw != null and is_instance_valid(_pw):
+		_pw.queue_free()
+		_pw = null
+		_pch = null
+		_pnc = null
 	if mp != null and mp.multiplayer_peer != null:
 		mp.multiplayer_peer.close()
