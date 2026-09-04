@@ -102,12 +102,16 @@ func _run() -> void:
 	check("net: aim direction respected (faced +Z while driving)",
 			absf(wrapf(_human.rotation.y - 0.0, -PI, PI)) < 0.5,
 			"rot_y=%.2f" % _human.rotation.y)
-	# 6: interpolated view converges on the server state.
+	# 6: the local view converges on the server state. Measured after the
+	# input stops: mid-motion the view intentionally trails the server by a
+	# snapshot or two, so converging to a standing server state is the stable
+	# property (prediction hard-snaps when it is off, otherwise it tracks).
+	await _frames(90)
 	var view: CharacterEntity = client._views.get(client.my_id, null)
 	var d := 1e9
 	if view != null:
 		d = view.global_position.distance_to(_human.global_position)
-	check("net: interpolated view tracks server state",
+	check("net: local view tracks server state",
 			d < 1.5, "dist=%.2f" % d)
 	# 7: combat + event relay - the bot squads fight while we hold position.
 	await _frames(3600)  # 60 sim seconds
