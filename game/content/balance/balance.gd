@@ -21,9 +21,12 @@ const ENTRIES: Array = [
 
 ## Role bands (loose now, tightened as the six identities settle).
 ## dps = 2 s-window harness DPS vs a standard dummy; hp = kit max_hp.
+## Tank max: bastion's 8-pellet / 12-deg shotgun makes harness DPS stochastic
+## (24-35 observed over repeated runs); 40 keeps the role under ASSAULT's
+## floor (45) while covering the sheet value's spread.
 const BANDS: Dictionary = {
 	"ASSAULT":    {"min_dps": 45.0, "max_dps": 135.0, "min_hp": 90.0},
-	"TANK":       {"min_dps": 8.0, "max_dps": 30.0, "min_hp": 180.0},
+	"TANK":       {"min_dps": 8.0, "max_dps": 40.0, "min_hp": 180.0},
 	"SUPPORT":    {"min_dps": 30.0, "max_dps": 90.0, "min_hp": 90.0},
 	"CONTROLLER": {"min_dps": 35.0, "max_dps": 75.0, "min_hp": 80.0},
 }
