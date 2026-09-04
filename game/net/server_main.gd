@@ -9,7 +9,10 @@ const FIXED_DT := 1.0 / 60.0
 var world: World
 var net: MatchServer
 var disc: Discovery
+var lob: LobbyClient = null
 var _accum := 0.0
+var _lob_last_humans := -1
+var _lob_last_over := false
 
 func _ready() -> void:
 	randomize()
@@ -54,6 +57,48 @@ func _ready() -> void:
 				"target_score": world_ref.target_score, "time": world_ref.time}
 	add_child(disc)
 	disc.setup(dport)
+	_register_lobby(port, size)
+
+## Optional lobby registration (Phase 5 online): --lobby=host:port advertises
+## this match into the matchmaking queue (region via --lregion, reachable
+## address via --lip). Godot 4.7 removed OS.get_local_ip() (no core local-IP
+## getter remains), so --lip defaults to 127.0.0.1: pass it explicitly when
+## clients reach this server at a different address (e.g. 10.0.2.2 for the
+## Android emulator NAT).
+func _register_lobby(port: int, size: int) -> void:
+	var lobby_addr := ""
+	var lregion := ""
+	var lname := ""
+	var lip := ""
+	for a in OS.get_cmdline_user_args():
+		if a.begins_with("--lobby="):
+			lobby_addr = a.substr(8)
+		elif a.begins_with("--lregion="):
+			lregion = a.substr(10)
+		elif a.begins_with("--lname="):
+			lname = a.substr(8)
+		elif a.begins_with("--lip="):
+			lip = a.substr(6)
+	if lobby_addr == "":
+		return
+	var parts := lobby_addr.split(":")
+	lob = LobbyClient.new()
+	add_child(lob)
+	lob.setup(String(parts[0]), int(parts[1]))
+	if lip == "":
+		# 4.7: no OS.get_local_ip() - advertise loopback and warn; --lip is
+		# required for clients on a different network.
+		lip = "127.0.0.1"
+		push_warning("SERVER lobby: pass --lip=<reachable ip> (OS.get_local_ip was removed in Godot 4.7)")
+	var lip_f := lip
+	var lregion_f := lregion if lregion != "" else "latam_saopaulo"
+	var lname_f := lname if lname != "" else ("match @" + lip_f)
+	var port_f := port
+	var size_f := size
+	lob.connected_ok.connect(func() -> void:
+		lob.register_match(lip_f, port_f, lregion_f, size_f, lname_f))
+	print("SERVER lobby registration at %s (advertising %s, region %s)" % [
+			lobby_addr, lip_f, lregion_f])
 
 func _fill_teams(size: int) -> void:
 	# Same roster variety as the offline match (main.gd): shuffled heroes.
@@ -77,3 +122,9 @@ func _physics_process(delta: float) -> void:
 		_accum -= FIXED_DT
 		steps += 1
 	net.tick(delta)
+	if lob != null:
+		var humans := int(net.team_humans[0]) + int(net.team_humans[1])
+		if humans != _lob_last_humans or world.match_over != _lob_last_over:
+			_lob_last_humans = humans
+			_lob_last_over = world.match_over
+			lob.send_state(humans, world.match_over)
