@@ -236,7 +236,7 @@ func kill(target: CharacterEntity, source: CharacterEntity, is_head: bool) -> vo
 			source.ability.on_kill()
 	# Respawn is authoritative and scheduled on the world clock (directive:
 	# death/respawn is never client-trusted).
-	schedule(time + target.respawn_time, _make_respawn(target))
+	schedule(time + target.respawn_time, _make_respawn(target.get_instance_id()))
 	emit_event("kill", {
 		"killer" = _name_of(source),
 		"victim" = _name_of(target),
@@ -246,8 +246,17 @@ func kill(target: CharacterEntity, source: CharacterEntity, is_head: bool) -> vo
 	})
 	target.hide_visual()
 
-func _make_respawn(target: CharacterEntity) -> Callable:
-	return func() -> void: _respawn(target)
+func _make_respawn(id: int) -> Callable:
+	# Capture the instance id (a plain int), not the character: a freed
+	# character (tests, a yielding bot) would otherwise trip "Lambda capture
+	# was freed, passed null" when the respawn fires.
+	return func() -> void: _respawn_id(id)
+
+func _respawn_id(id: int) -> void:
+	for ch in characters:
+		if ch.get_instance_id() == id:
+			_respawn(ch)
+			return
 
 func _respawn(target: CharacterEntity) -> void:
 	# A freed character (tests free bots mid-match) can still have a pending
