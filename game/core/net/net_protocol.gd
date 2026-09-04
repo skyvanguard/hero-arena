@@ -20,6 +20,14 @@ const M_SLOT := 0x53    # 'S'
 const M_INPUT := 0x49   # 'I'
 const M_SNAPSHOT := 0x50  # 'P'
 const M_EVENT := 0x45    # 'E'
+# LAN discovery (UDP discovery port, not the ENet game port).
+const M_DISCOVER_PING := 0x44  # 'D'
+const M_DISCOVER_REPLY := 0x46 # 'F'
+
+# Join state reported by discovery replies.
+const DISC_OPEN := 0
+const DISC_FULL := 1
+const DISC_OVER := 2
 
 # Event types.
 const E_HIT := 0
@@ -223,6 +231,33 @@ static func unpack_snapshot(p: PackedByteArray) -> Dictionary:
 		projs.append(pr)
 	return {"seq": seq, "time": time, "score": [s0, s1], "winner": winner,
 			"chars": chars, "projs": projs}
+
+# ---- LAN discovery (UDP, best-effort) ----
+
+## ping: client -> server (broadcast or unicast on the discovery port).
+static func pack_discover_ping(client_name: String) -> PackedByteArray:
+	return u8(M_DISCOVER_PING) + s_bytes(client_name)
+
+## reply: server -> pinger. game_port is where the ENet match listens;
+## state is DISC_OPEN / DISC_FULL / DISC_OVER for a fresh join.
+static func pack_discover_reply(state: int, team_size: int, humans: int,
+		target_score: int, game_port: int, name: String, time: float) -> PackedByteArray:
+	var b := u8(M_DISCOVER_REPLY) + u8(state) + u8(team_size) + u8(humans) + u8(target_score)
+	b += u16(game_port) + s_bytes(name) + f32(time)
+	return b
+
+static func unpack_discover_reply(p: PackedByteArray) -> Dictionary:
+	var o := 1
+	var st := read_u8(p, o); o += 1
+	var ts := read_u8(p, o); o += 1
+	var hu := read_u8(p, o); o += 1
+	var tg := read_u8(p, o); o += 1
+	var gp := read_u16(p, o); o += 2
+	var nm := read_str(p, o)
+	o += nm.to_utf8_buffer().size() + 2
+	var tm := _f32_at(p, o)
+	return {"state": st, "team_size": ts, "humans": hu, "target_score": tg,
+			"game_port": gp, "name": nm, "time": tm}
 
 # ---- events (reliable) ----
 

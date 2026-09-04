@@ -13,8 +13,11 @@ var team_size := 3   # players per side (1..6); 3v3 tuned default
 var target_score := 15
 var match_duration := 300.0  # 5 min, mid of the 3-8 min band (first to target_score, or higher score here)
 
-## LAN server port (Phase 5 v1: direct connect; discovery lands later).
+## LAN server port (Phase 5 v1: direct connect).
 var net_port := 7777
+## LAN discovery port (Phase 5, UDP ping/reply; separate from the ENet game
+## port, which owns UDP on net_port).
+var net_discovery_port := 7778
 
 ## Net v1.1 (Phase 5): client prediction for the local player. The client
 ## steps its own character through the same controller interface and
