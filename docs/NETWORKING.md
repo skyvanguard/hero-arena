@@ -1,10 +1,11 @@
 # NETWORKING.md — Architecture & Protocol (Phase 5, as-built v1.1)
 
-Status: **v1.1 shipped (round 10)** — v1 (dedicated headless server, LAN direct
-connect, loopback suite) plus: **server input sanitization + seq gate,
+Status: **v1.1 shipped (rounds 10-11)** — v1 (dedicated headless server, LAN
+direct connect, loopback suite) plus: **server input sanitization + seq gate,
 session-token reconnect, World lag-comp hitscan, client prediction +
-reconciliation, SimLink net-sim harness** (150 ms RTT + 2% loss suite).
-LAN discovery + internet play remain later Phase 5 rounds.
+reconciliation, SimLink net-sim harness** (150 ms RTT + 2% loss suite), and
+**LAN discovery** (UDP broadcast/unicast ping with live match state, SCAN in
+hero-select). Internet play remains the last Phase 5 item.
 
 ## 1. Transport (as-built)
 
@@ -29,13 +30,29 @@ LAN discovery + internet play remain later Phase 5 rounds.
   whole stack at 150 ms RTT + 2% loss with no sockets, and how the future
   latency-profile runs (50/150/300 ms, 10% loss) will work.
 - Server scene: `net/server.tscn` (`net/server_main.gd`) — headless, no UI,
-  `--port=N` user arg. Pre-fills both teams with bots to
-  `MatchConfig.team_size`; a human join **yields the bot standing at the spawn
-  point itself** (team pick = fewer *humans*, so 1v1 fill still works).
-  Yield uses **immediate `free()`**, not `queue_free()`: a frame of exact
-  overlap between the fresh human and the yielding bot pushes them apart
-  vertically at ~66 m/s (Godot 4.7 resolves exact capsule overlaps with a
-  vertical MTV — probe-verified), which would visibly hop the joiner.
+  `--port=N` user arg (`--dport=N` for discovery). Pre-fills both teams
+  with bots to `MatchConfig.team_size`; a human join **yields the bot
+  standing at the spawn point itself** (team pick = fewer *humans*, so 1v1
+  fill still works). Yield uses **immediate `free()`**, not `queue_free()`:
+  a frame of exact overlap between the fresh human and the yielding bot pushes
+  them apart vertically at ~66 m/s (Godot 4.7 resolves exact capsule overlaps
+  with a vertical MTV — probe-verified), which would visibly hop the joiner.
+- **LAN discovery** (`core/net/discovery.gd` responder +
+  `core/net/discovery_scanner.gd` client): the server answers
+  M_DISCOVER_PING on the UDP **discovery port** (`MatchConfig.net_discovery_port`
+  = 7778; separate from the ENet game port, which owns UDP on 7777) with the
+  live state (open / full / over, team size, human count, game port). The
+  client SCAN broadcasts the ping (255.255.255.255) **and** unicasts it to the
+  explicit host in the join field — the unicast leg also works across the
+  emulator NAT, where broadcasts do not reach the host. Results are deduped by
+  IP (a multi-homed server legitimately appears once per interface).
+- **Godot 4.7 PacketPeerUDP note (probed):** `set_mode_server()` /
+  `set_mode_client()` are gone — use `bind(port)` (server: all interfaces;
+  client: `bind(0)` = connectionless ephemeral) + `set_dest_address()` +
+  `put_packet()`; poll with `get_available_packet_count()` / `get_packet()` /
+  `get_packet_ip()` / `get_packet_port()` (read ip/port only AFTER
+  `get_packet()` — the packet identity is consumed by that call);
+  `set_broadcast_enabled(true)` for broadcast sends.
 - Client: `core/net/match_client.gd` — embedded in the game process
   (hero-select JOIN row). Builds a local un-stepped `World` + `Arena.build`
   for visuals only; all sim state comes from snapshots.
@@ -61,6 +78,8 @@ Dispatch is by first magic byte, channel-independent:
 | `0x49` | M_INPUT | C→S | unreliable | seq u16, move (f32,f32), yaw f32, pitch f32, fire u8, edges u8, **time_est f32** (client's estimate of the server time this frame was sampled at) |
 | `0x50` | M_SNAPSHOT | S→C | unreliable | seq u16, time f32, score0/1 u16, winner i8, chars[], projs[] |
 | `0x45` | M_EVENT | S→C | reliable | type u8 + payload |
+| `0x44` | M_DISCOVER_PING | C→S | UDP discovery port | client name str |
+| `0x46` | M_DISCOVER_REPLY | S→C | UDP discovery port | state u8 (0 open, 1 full, 2 over), team_size u8, humans u8, target_score u8, game_port u16, name str, time f32 |
 
 - **Snapshot**: all characters (id u8, team u8, alive u8, hero_idx u8,
   pos (f32×3), rot_y f32, hp/max_hp f32) up to `MAX_CHARS = 6` per side
@@ -190,7 +209,11 @@ Dispatch is by first magic byte, channel-independent:
   50 s combat (≥2 kills) + kill feed, **drop → freeze → new client re-hellos
   with the token → same CharacterEntity instance + same char id, token
   consumed**, server keeps stepping.
-- Full battery: 9 headless suites, 199 checks.
+- `tests/test_discovery.tscn` — UDP ping/reply over loopback (6 checks):
+  open server answers with game port + state + humans, join reflected in the
+  headcount, full and over states advertised (over wins over full), dead port
+  finishes empty.
+- Full battery: 10 headless suites, 205 checks.
 
 ## 8. v1.1 tradeoffs (explicit)
 
@@ -200,6 +223,7 @@ Dispatch is by first magic byte, channel-independent:
 | Lag-comp = analytic 3-sphere rewind (not full physics re-sim) | Cheap and deterministic; capsule shapes match the real colliders | Re-sim window if abilities make it matter |
 | One-way latency from client `time_est` (no RTT ping) | ENet + this already bounds the error; window clamp absorbs it | RTT ping for symmetric window |
 | Frozen slot can be yielded to a fresh join (token invalidated) | Simpler than slot locks; the joiner gets a spot | Optional slot lock with grace period |
-| No LAN discovery (type host:port) | Direct connect validates the wire | UDP broadcast ping/reply + SCAN button |
+| Discovery deduped by IP (a multi-homed server lists once per interface) | Correct general behavior; LANs rarely multi-home one server | Group by game identity if it ever hurts |
+| Broadcasts do not cross the emulator NAT | The unicast leg (explicit host) covers the emulator case; real LANs get both | mDNS if two phones become the acceptance test |
 | No internet play | LAN-first mandate (directive §21) | Regions + matchmaking prototype |
 | Snapshot cap 6/8 (chars/projs) | 6v6 + 8 projectiles is the tuned max | Grow with 6v6 tuning |
