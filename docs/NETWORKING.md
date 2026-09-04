@@ -1,13 +1,15 @@
 # NETWORKING.md — Architecture & Protocol (Phase 5, as-built v1.1)
 
-Status: **v1.1 shipped (rounds 10-12)** — v1 (dedicated headless server, LAN
-direct connect, loopback suite) plus: **server input sanitization + seq gate,
-session-token reconnect, World lag-comp hitscan, client prediction +
-reconciliation, SimLink net-sim harness** (150 ms RTT + 2% loss suite),
-**LAN discovery** (UDP broadcast/unicast ping with live match state, SCAN in
-hero-select), and **two-device LAN verification** (round 12: two Android
-emulators + host-dedicated server in one live match). Internet play remains
-the last Phase 5 item.
+Status: **v1.1 shipped (rounds 10-12) + lobby v1 prototype (round 13)** — v1
+(dedicated headless server, LAN direct connect, loopback suite) plus: **server
+input sanitization + seq gate, session-token reconnect, World lag-comp
+hitscan, client prediction + reconciliation, SimLink net-sim harness** (150 ms
+RTT + 2% loss suite), **LAN discovery** (UDP broadcast/unicast ping with live
+match state, SCAN in hero-select), **two-device LAN verification** (round 12),
+and the **lobby/matchmaking sidecar** (round 13, §9): UDP JSON-lines lobby with
+a 4-stage party-aware queue (LATAM-priority widen) and published-server
+addressing — verified end-to-end on the emulators (menu → queue → assign →
+in-match). NAT traversal/relay is the remaining Phase 5 item.
 
 ## 1. Transport (as-built)
 
@@ -240,5 +242,97 @@ Dispatch is by first magic byte, channel-independent:
 | Frozen slot can be yielded to a fresh join (token invalidated) | Simpler than slot locks; the joiner gets a spot | Optional slot lock with grace period |
 | Discovery deduped by IP (a multi-homed server lists once per interface) | Correct general behavior; LANs rarely multi-home one server | Group by game identity if it ever hurts |
 | Broadcasts do not cross the emulator NAT | The unicast leg (explicit host) covers the emulator case; real LANs get both | mDNS if two phones become the acceptance test |
-| No internet play | LAN-first mandate (directive §21) | Regions + matchmaking prototype |
+| Internet play is lobby-published, not relayed (§9) | LAN-first mandate (directive §21); relay/hole-punch is a separate follow-up | Relay/hole-punch, lobby HA, party handshake |
 | Snapshot cap 6/8 (chars/projs) | 6v6 + 8 projectiles is the tuned max | Grow with 6v6 tuning |
+## 9. Lobby & matchmaking (round 13, v1 prototype)
+
+Separate lightweight sidecar for online play: core/matchmaking/regions.gd
+(region table), core/net/lobby_protocol.gd (line-JSON + seq helpers),
+core/net/lobby_server.gd (UDP sidecar), core/net/lobby_client.gd
+(client-side), net/lobby.tscn (headless scene). tests/test_lobby.tscn
+covers the queue (12 checks).
+
+### 9.1 Why UDP (and not TCP)
+
+Godot 4.7.2 headless **TCP was probed and is unusable as a server socket**:
+TCPServer.listen() returns OK and reports the local port but creates **no
+system socket** (no fd under /proc/PID/fd, invisible to ss -tln, external
+connects refused; cross-process godot-to-godot TCP ends in STATUS_ERROR).
+In-process loopback TCP works — which is exactly what a lobby is not. UDP
+(PacketPeerUDP) is fully real in headless (proven by discovery + the
+two-emulator runs). So the lobby transport is **UDP with application-level
+reliability**:
+
+- One JSON object per line (newline-terminated; a line may span packets —
+  the server keeps a per-peer line buffer).
+- Every client-to-server message needing an ack (join, reg) carries a seq;
+  the server dedupes per (peer, type, seq); the client retransmits the same
+  seq every 2.5 s until acked.
+- The server only sends queue progress while queued, so the client treats any
+  lobby message as keep-alive; 4 s of silence -> the client re-joins with a
+  FRESH seq (a lost assign would otherwise be swallowed forever by the
+  same-seq dedupe).
+- Ping every 1 s = keep-alive + RTT display. "Connected" = a fresh message
+  (any type); 5 s of silence = disconnected. The state machine keys on
+  RECEIVED time, not the last pong: a stale pong would re-fire the connect
+  branch forever (round-13 bug, fixed).
+
+### 9.2 Message types (lobby protocol v1.1)
+
+| Type | Dir | Seq | Notes |
+|---|---|---|---|
+| ping / pong(at) | both | ping only | RTT echo; first ping from a new peer also triggers hello (UDP has no connect event) |
+| hello{region,matches,waiters} | s->c | - | Sent on first ping |
+| join{region,party,skill,name} | c->s | yes | Creates the waiter |
+| queue{stage,waited,open} | s->c | - | >=1 Hz while queued; doubles as keep-alive |
+| assign{host,port,match_id,region,name,stage,waited} | s->c | - | Client then connects to the published game address |
+| reg{ip,port,region,team_size,name} | s->s | yes | A game server registers its match (published address) |
+| regack{match_id} | s->s | - | |
+| state{humans,over} | s->s | - | Live match state; ANY message from a match peer refreshes match liveness |
+
+Peers are keyed by ip:port and reaped after 5 s of silence (matches too —
+reaping is how a crashed server's match disappears).
+
+### 9.3 Four-stage queue (party-aware, LATAM-priority)
+
+| Stage | Window | Candidate rule |
+|---|---|---|
+| 1 STRICT | 0-5 s | exact region match |
+| 2 SKILL | 5-15 s | no-op in v1 (skill recorded, not ranked) |
+| 3 REGION | 15-60 s | any region in Regions.widen_order(preference) — LATAM first (Sao Paulo -> Bogota -> CDMX), then NA/EU/Asia |
+| 4 BOTFILL | 60 s+ | any not-over match with room; fewest humans, then rank |
+
+A candidate needs room = team_size - humans >= party; over matches are never
+candidates. regions.gd holds the widen-order table (infra table, not
+gameplay balance — the magic-number rule's infra exception).
+
+### 9.4 Addressing & ops
+
+- The lobby assigns **published server addresses**: a game server starts with
+  --lobby=<host:port> --lip=<reachable IP> --lregion=<code> --lname=<name>
+  and registers itself; the client's assign carries that published ip:port.
+  **NAT traversal/relay is NOT included**: --lip must be reachable from
+  joining clients (on an emulator, 10.0.2.2 = the host; a host-side process
+  must use 127.0.0.1 for its own lobby leg — 10.0.2.2 only resolves from the
+  emulator side). OS.get_local_ip() is gone in Godot 4.7, so the server is
+  told explicitly (it warns when the 127.0.0.1 default is left).
+- MatchConfig.lobby_port = 7790 default. Hero-select has an ONLINE panel:
+  region cycle + live ping + PLAY -> queue -> auto-join via net_deployed
+  (ENTER/SPACE offline-launch is suppressed while queued).
+- The lobby is a separate headless process:
+  lobby.tscn -- --port=7790 --region=latam_saopaulo --fill=60. The game
+  server is unchanged except registration + state broadcast.
+
+### 9.5 v1 tradeoffs (explicit)
+
+- JSON lines over UDP: human-readable, zero codec deps, plenty for lobby
+  traffic; not binary-optimized (fine until thousands of waiters).
+- Party v1: a party only fits a match with room >= party; the party
+  group-join handshake is deferred.
+- One lobby process per region table; multi-region deployment + redirect is a
+  follow-up.
+- No NAT traversal/relay (published addresses); relay/hole-punch is a
+  separate tracked item.
+- Skill (stage 2) recorded but unranked in v1.
+- Botfill = "any open match after 60 s" because every match bot-fills
+  anyway; fewest-humans ordering is the v1 fairness choice.
