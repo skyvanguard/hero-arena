@@ -16,6 +16,16 @@ var match_duration := 300.0  # 5 min, mid of the 3-8 min band (first to target_s
 ## LAN server port (Phase 5 v1: direct connect; discovery lands later).
 var net_port := 7777
 
+## Net v1.1 (Phase 5): client prediction for the local player. The client
+## steps its own character through the same controller interface and
+## reconciles against snapshots (hard-snap above a small distance; death /
+## respawn always). Off = pure 100 ms interpolation (v1 behavior).
+var net_prediction := true
+## Server-side lag compensation: max rewind (s) World.hitscan applies to
+## target poses when validating a net human's shot; the actual rewind is the
+## shooter's measured input age clamped to this. 0 disables.
+var lag_comp_window := 0.2
+
 func set_difficulty(id: String) -> void:
 	if BotDifficulties.ids().has(id):
 		difficulty = id

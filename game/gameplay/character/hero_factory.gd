@@ -26,7 +26,7 @@ static func create(team: int, is_player: bool, color: Color = Color.WHITE,
 	# Body collider (capsule).
 	var body_shape := CollisionShape3D.new()
 	var cap := CapsuleShape3D.new()
-	cap.radius = 0.4
+	cap.radius = CharacterEntity.BODY_RADIUS
 	cap.height = BODY_H
 	body_shape.shape = cap
 	h.add_child(body_shape)
@@ -34,7 +34,7 @@ static func create(team: int, is_player: bool, color: Color = Color.WHITE,
 	# Body visual.
 	var body_mesh := MeshInstance3D.new()
 	var capsule := CapsuleMesh.new()
-	capsule.radius = 0.4
+	capsule.radius = CharacterEntity.BODY_RADIUS
 	capsule.height = BODY_H
 	var mat := StandardMaterial3D.new()
 	mat.albedo_color = color
@@ -59,7 +59,7 @@ static func create(team: int, is_player: bool, color: Color = Color.WHITE,
 	# Head (visual + separate sensor for headshots, own collision layer).
 	var head := Node3D.new()
 	head.name = "Head"
-	head.position.y = 1.6
+	head.position.y = CharacterEntity.HEAD_OFFSET
 	var head_mesh := MeshInstance3D.new()
 	var sphere := SphereMesh.new()
 	sphere.radius = 0.26
@@ -78,7 +78,7 @@ static func create(team: int, is_player: bool, color: Color = Color.WHITE,
 	head_sensor.collision_mask = 0
 	var head_shape := CollisionShape3D.new()
 	var hs := SphereShape3D.new()
-	hs.radius = 0.28
+	hs.radius = CharacterEntity.HEAD_RADIUS
 	head_shape.shape = hs
 	head_sensor.add_child(head_shape)
 	head.add_child(head_sensor)

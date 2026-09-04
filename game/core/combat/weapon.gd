@@ -122,22 +122,12 @@ func _fire(world: World, dir: Vector3) -> void:
 	var first_end := origin + dir * max_range
 	for i in pellets:
 		var d := _apply_spread(dir)
-		var to := origin + d * max_range
-		var q := PhysicsRayQueryParameters3D.create(origin, to,
-				CharacterEntity.LAYER_BODY | CharacterEntity.LAYER_HEAD)
-		q.exclude = _owner.own_rids()
-		var res := _owner.get_world_3d().get_direct_space_state().intersect_ray(q)
-		var end := to
-		var hit_ch: CharacterEntity = null
-		var is_head := false
-		if res:
-			end = res.position
-			var node: Node = res.collider
-			while node != null and not (node is CharacterEntity):
-				node = node.get_parent()
-			if node is CharacterEntity:
-				hit_ch = node
-				is_head = CharacterEntity.hit_is_head(res.collider)
+		# World-owned hitscan (single source of truth): world geometry +
+		# characters, with lag compensation for net humans (delay 0 for bots).
+		var hit: Dictionary = world.hitscan(origin, d, _owner, max_range)
+		var end: Vector3 = hit.pos
+		var hit_ch: CharacterEntity = hit.ch
+		var is_head := bool(hit.is_head)
 		if hit_ch != null and hit_ch != _owner:
 			var dmg := damage * damage_mult * (headshot_mult if is_head else 1.0)
 			world.damage(hit_ch, dmg, _owner, is_head, end)

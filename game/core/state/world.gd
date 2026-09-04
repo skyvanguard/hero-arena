@@ -19,7 +19,13 @@ var target_score := 15
 var match_duration := 300.0
 var match_over := false
 var winner := -1  # 0 / 1 / -1 (draw or undecided)
+## Lag compensation (Phase 5): max rewind (s) for hitscan validation. A
+## shooter's measured input age (CharacterEntity.net_comp_delay, set by the
+## MatchServer from the client's server-time estimate) is clamped to this;
+## targets are rewound through _history to the shooter's perception time.
+var lag_comp_window := 0.2
 var _timers: Array = []            # [{at: float, fn: Callable}]
+var _history: Dictionary = {}      # ch -> Array[[pos: Vector3, rot_y: float]] (60 Hz tail)
 
 func emit_event(name: String, data: Dictionary) -> void:
 	world_event.emit(name, data)
@@ -33,6 +39,7 @@ func register_character(ch: CharacterEntity) -> void:
 
 func unregister_character(ch: CharacterEntity) -> void:
 	characters.erase(ch)
+	_history.erase(ch)
 
 func register_projectile(p: Projectile) -> void:
 	add_child(p)
@@ -80,6 +87,7 @@ func step(dt: float) -> void:
 			fn.call()
 	for ch in characters:
 		ch.step(self, dt)
+	_record_history()
 	for pr in projectiles:
 		pr.step(self, dt)
 	var alive_pr: Array[Projectile] = []
@@ -95,6 +103,92 @@ func step(dt: float) -> void:
 			alive_z.append(z)
 	zones = alive_z
 	_check_match_over()
+
+## Per-step pose tail for lag compensation (capped to the window).
+func _record_history() -> void:
+	var cap := maxi(2, int(lag_comp_window * 60.0) + 2)
+	for ch in characters:
+		var h: Array = _history.get(ch, [])
+		h.append([ch.global_position, ch.rotation.y])
+		if h.size() > cap:
+			h.remove_at(0)
+		_history[ch] = h
+
+## Authoritative hitscan with lag compensation. Ray from origin along dir
+## (normalized) within max_range: world geometry + characters, where enemy
+## characters are ALSO tested analytically at past poses (their _history,
+## rewound by source.net_comp_delay clamped to lag_comp_window). The current
+## physics ray still provides the wall distance (shots never reach through
+## geometry) and the no-delay result.
+## Returns {pos: Vector3, ch: CharacterEntity or null, is_head: bool}.
+func hitscan(origin: Vector3, dir: Vector3, source: CharacterEntity,
+		max_range: float) -> Dictionary:
+	var q := PhysicsRayQueryParameters3D.create(origin, origin + dir * max_range,
+			CharacterEntity.LAYER_WORLD | CharacterEntity.LAYER_BODY | CharacterEntity.LAYER_HEAD)
+	if source != null:
+		q.exclude = source.own_rids()
+	var res: Dictionary = get_tree().root.get_world_3d().get_direct_space_state().intersect_ray(q)
+	var best_d := max_range
+	var best_ch: CharacterEntity = null
+	var best_head := false
+	if res:
+		best_d = (res.position - origin).length()
+		var node: Node = res.collider
+		while node != null and not (node is CharacterEntity):
+			node = node.get_parent()
+		if node is CharacterEntity:
+			best_ch = node
+			best_head = CharacterEntity.hit_is_head(res.collider)
+	var delay := 0.0
+	if source != null:
+		delay = clampf(source.net_comp_delay, 0.0, lag_comp_window)
+	if delay > 0.005 and best_ch != source:
+		var n := mini(int(ceilf(delay * 60.0)), 120)
+		for ch in characters:
+			if ch == source or not ch.alive or int(ch.team) == int(source.team):
+				continue
+			var h: Array = _history.get(ch, [])
+			if h.size() < 2:
+				continue
+			for i in mini(n, h.size() - 1):
+				var pose: Vector3 = (h[h.size() - 1 - i] as Array)[0]
+				var t: Array = _ray_character(origin, dir, pose, best_d)
+				if t[0] < best_d:
+					best_d = float(t[0])
+					best_ch = ch
+					best_head = bool(t[1])
+	return {"pos": origin + dir * best_d, "ch": best_ch, "is_head": best_head}
+
+## Ray vs one character's analytic body (3-sphere capsule approx) + head
+## sphere at a past pose. Returns [t_along (INF = miss), is_head].
+static func _ray_character(origin: Vector3, dir: Vector3, pose: Vector3,
+		max_d: float) -> Array:
+	var best := INF
+	var head := false
+	var up := Vector3.UP
+	for k in [-CharacterEntity.BODY_HALF_H, 0.0, CharacterEntity.BODY_HALF_H]:
+		var t: float = _ray_sphere(origin, dir, pose + up * k, CharacterEntity.BODY_RADIUS)
+		if t < best:
+			best = t
+			head = false
+	var th: float = _ray_sphere(origin, dir, pose + up * CharacterEntity.HEAD_OFFSET,
+			CharacterEntity.HEAD_RADIUS)
+	if th < best:
+		best = th
+		head = true
+	if best > max_d:
+		return [INF, false]
+	return [best, head]
+
+## Ray vs sphere: earliest t >= 0 along the (normalized) ray, INF on miss.
+static func _ray_sphere(origin: Vector3, dir: Vector3, c: Vector3, r: float) -> float:
+	var oc := origin - c
+	var b := oc.dot(dir)
+	var disc := b * b - (oc.length_squared() - r * r)
+	if disc < 0.0:
+		return INF
+	var t := -b - sqrt(disc)
+	return t if t >= 0.0 else INF
 
 func _check_match_over() -> void:
 	if match_over:

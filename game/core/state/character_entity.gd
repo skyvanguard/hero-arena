@@ -10,6 +10,16 @@ const LAYER_WORLD := 1
 const LAYER_BODY := 2
 const LAYER_HEAD := 4
 
+## Body/head hit geometry (single source of truth): the capsule collider is
+## centered on the character origin (capsule h 1.8, r 0.4 -> cylinder core
+## +-0.5 around the origin) and the head sensor is a sphere r 0.28 at +1.6.
+## HeroFactory builds the colliders from these; World's lag-comp ray tests
+## the same shapes analytically (past poses), so both must agree.
+const BODY_RADIUS := 0.4
+const BODY_HALF_H := 0.5
+const HEAD_RADIUS := 0.28
+const HEAD_OFFSET := 1.6
+
 ## All of this character's own physics RIDs (body + head sensor). Required
 ## because the head sensor is a nested StaticBody3D: excluding only the
 ## body RID still lets rays self-hit the sensor (Phase 4 duel probe — the
@@ -74,6 +84,10 @@ var protected_until := 0.0
 var death_time := 0.0
 var slow_ratio := 0.0     ## strongest active slow (0..1), decays via slow_until
 var slow_until := 0.0
+## Server-measured input age for this character (MatchServer, clamped to the
+## world's lag-comp window): World.hitscan rewinds OTHER characters to this
+## character's perception time when validating its shots.
+var net_comp_delay := 0.0
 # Support-side boosts (data-driven): strongest active wins, like slow.
 var speed_boost_ratio := 0.0
 var speed_boost_until := 0.0
