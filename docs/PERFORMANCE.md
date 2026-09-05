@@ -117,14 +117,23 @@ uncompressed (the Godot binary dominates).
 ## Known environment notes
 
 - Headless emulators (no window / no KVM-gpu) can fail Vulkan present with
-  VK_ERROR_OUT_OF_DATE. For emulator smoke tests, temporarily switch
-  `renderer/rendering_method` to `gl_compatibility`; shipping builds use `mobile`.
-  **The working combo is `-gpu angle_indirect` + gl_compatibility** (host
-  ANGLE->Mesa, the Phase 1/2 config). Verified round 32: `-gpu
-  swiftshader_indirect` + gl_compatibility fails with `CanvasShaderGLES3:
-  Fragment shader active uniforms exceed GL_MAX_FRAGMENT_UNIFORM_VECTORS
-  (261)` (uniform gray screen, input still partially live), and
-  angle_indirect + mobile stalls on Vulkan present.
+  VK_ERROR_OUT_OF_DATE. For emulator smoke tests, set the FEATURE-TAGGED
+  line in project.godot to `renderer/rendering_method.mobile="gl_compatibility"`
+  (keep `renderer/rendering_method="mobile"` for shipping). Godot 4.7
+  resolves the `.mobile` feature-tagged variant over the base key on
+  Android: setting only the base key to `gl_compatibility` still selects
+  "Forward Mobile"/Vulkan (verified round 33 - the app logged
+  `Vulkan 1.3.0 - Forward Mobile` and stalled on VkResult 5 while the
+  packed project already carried the base key as gl_compatibility).
+  Rebuild the APK and do a CLEAN install (uninstall + install): `install -r`
+  keeps the app data, but a fresh install is the reliable way to pick up
+  the repacked project. **The working combo is `-gpu angle_indirect` +
+  gl_compatibility** (host ANGLE->Mesa, the Phase 1/2 config) - the engine
+  log must read `OpenGL ES 3.1 ... Compatibility ... ANGLE`. Verified round
+  32: `-gpu swiftshader_indirect` + gl_compatibility fails with
+  `CanvasShaderGLES3: Fragment shader active uniforms exceed
+  GL_MAX_FRAGMENT_UNIFORM_VECTORS (261)` (uniform gray screen, input still
+  partially live), and angle_indirect + mobile stalls on Vulkan present.
 - `PerfProbe` (game/core/util/perf_probe.gd) logs `PERF <fps> fps (worst frame
   <ms>)` every 5 s to logcat — filter with `adb logcat -s godot`.
 - Memory watch used for the Phase 4 bisect: `adb shell dumpsys meminfo
