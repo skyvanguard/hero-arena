@@ -91,6 +91,11 @@ Dispatch is by first magic byte, channel-independent:
   (constant: up to `team_size` per side, 6 v1) + up to `MAX_PROJS = 8`
   projectiles (owner u8, pos f32×3, dir f32×3). score0/1 carry the MODE'S
   score (kills in TDM, captures in Control).
+- **Perk block (D25, v1.6)**: TRAILING after the projectile array — n u8
+  (= char count) + 5 u8 per char in char-list order: [perk_level, perk0,
+  perk1, pend0, pend1] as perk-pool indices (255 = none). Backward
+  compatible by position: older servers simply don't send the block (clients
+  leave `perk_extra = []`), older clients ignore the trailing bytes.
 - **Control bytes (D16, Phase 6 v1)**: owner u8 (0 none, 1 team0, 2 team1),
   the team progress runs toward (0/1, 2 none), progress 0..255. The point
   POSITION is not sent — v1 fixes it at the arena center, which the client's
@@ -103,12 +108,17 @@ Dispatch is by first magic byte, channel-independent:
   LAYOUT is not sent: bases and the lane are the client's own arena
   spawns, deterministic on both sides.
 - **Events** (reliable, for UI/feel): E_HIT=0, E_KILL=1 (names + teams +
-  headshot), E_RESPAWN=2, E_MATCH_OVER=3, E_HEAL=4.
+  headshot), E_RESPAWN=2, E_MATCH_OVER=3, E_HEAL=4, E_PERK=5 (D25: ch u8,
+  level u8, choice0/choice1 u8 = pool indices, picked u8 — 255 = the offer is
+  pending, else the index the character picked; the client resolves names from
+  its own copy of the same `content/perks/perks.tres` pool).
 - **Aim convention**: client sends **absolute** camera yaw/pitch; server
   direction = `cos(pitch)·sin(yaw), sin(pitch), cos(pitch)·cos(yaw)`
   (hero rig rotated PI on Y: yaw=pitch=0 → local +Z = project forward).
-  Input edges (bitfield): 1 jump, 2 reload, 4 ability1, 8 ability2, 16 ult —
-  OR-accumulated per input, consumed server-side.
+  Input edges (bitfield): 1 jump, 2 reload, 4 ability1, 8 ability2, 16 ult,
+  32 perk_pick0, 64 perk_pick1 (D25) — OR-accumulated per input, consumed
+  server-side; perk picks are validated through the same server `pick()`
+  entry point (a stale/wrong index is rejected and the offer stays up).
 - **Rates**: snapshots 20 Hz (`SNAPSHOT_HZ`), input sampled 20 Hz
   (`INPUT_HZ`) on the client. Server steps at 60 Hz fixed.
 

@@ -230,3 +230,51 @@ projectiles, headshots, slow) is what gets exercised.
   sim + input sandbox: zero matchmaking, zero network, zero humans needed.
 - The range reuses the hero select, so testing a new hero only ever needs
   a new .tres — the range is content-agnostic by construction (data-driven).
+
+## Perks (Phase 7, D25) — in-match levels, choices not just numbers
+
+**Purpose:** mid-match escalation that makes the SAME hero play differently
+from run to run. Every match, every player (and every bot) levels up twice
+(level 2 and level 3) and picks ONE of TWO offered perks. The offers are
+role-aware (a tank sees tank perks; an assault never sees tank-only perks),
+seeded per match, and the pick is permanent for the match. This is the
+exit-criteria metric: *choices, not just numbers* — the pool is built so
+repeats across players/heroes stay rare and the identity of the pick is
+visible (badge + kill-feed line) so opponents can read it.
+
+**XP (content `content/perks/perks.tres`, no magic numbers in the sim):**
+- Damage dealt: 0.05 xp / point (20 damage = 1 xp)
+- Heal dealt: 0.04 xp / point (supports earn by supporting)
+- Kill: 12 xp (+4 bonus for a headshot)
+- Level 2 at 40 xp (roughly the 1-2 min mark of a 3-8 min match),
+  level 3 at 100 xp (roughly the 3-5 min mark).
+
+**Pool (12 perks, two tiers; names/descs are original IP):**
+
+| Tier | Perk | Roles | Effect |
+|---|---|---|---|
+| 1 | Overclock | all | fire rate x1.12 |
+| 1 | Heavy Rounds | all | damage x1.10 |
+| 1 | Adrenaline | all | move speed x1.08 |
+| 1 | Second Wind | all | out-of-combat regen x1.50 |
+| 1 | Aegis | tank, support | max HP x1.15 + 15 instant heal |
+| 1 | Charge Focus | all | ultimate charge x1.25 |
+| 2 | Rapid Cycle | all | ability cooldowns x0.88 |
+| 2 | Steady Hands | all | spread x0.85 |
+| 2 | Iron Skin | tank | max HP x1.20 + 20 instant heal |
+| 2 | Vanguard | support, controller | move speed x1.12 |
+| 2 | Executioner | assault | damage x1.15 |
+| 2 | Overflow | support, controller | ultimate charge x1.40 |
+
+**Rules:**
+- Offers are TWO distinct perks from the role-filtered tier pool, never
+  repeating a perk the character already picked. If a tier pool is
+  exhausted for a role, the level-up offers nothing (carries on).
+- The pick is server-authoritative: the client sends only an edge bit
+  (declared action field); a stale or wrong pick is rejected and the
+  cards stay up.
+- Bots pick through the same entry point after a 0.75 s delay (so the
+  cards are visible, and the pick is deterministic per match seed).
+- No perk touches matchmaking, unlocks, or progression — in-match only,
+  reset with the match (no pay-to-win, no meta drift).
+- The practice range has no perks: it trains the kit, not the match.
