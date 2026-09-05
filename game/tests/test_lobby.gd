@@ -116,7 +116,7 @@ func _run() -> void:
 	var rtt := await _wait_pong(c1)
 	check("2 ping/pong RTT measured", rtt >= 0.0, "rtt=%s" % rtt)
 	var m1 := await _client()
-	m1.register_match("127.0.0.1", 7777, "latam_bogota", 3, "BOG")
+	m1.register_match("127.0.0.1", 7777, "latam_bogota", 3, "BOG", "capture")
 	var regack := await _wait_regack(m1)
 	check("3 match reg -> regack", int(regack.get("match_id", 0)) >= 1, str(regack))
 	await _sleep(0.2)
@@ -124,9 +124,10 @@ func _run() -> void:
 	await _wait_hello(w1)
 	w1.join_queue("latam_bogota", 1, 0, "W1")
 	var a1 := await _wait_assign(w1)
-	check("4 strict same-region assign (stage 1)",
+	check("4 strict same-region assign (stage 1, mode forwarded)",
 			float(a1.get("stage", -1)) == 1.0 and str(a1.get("host")) == "127.0.0.1"
-			and int(a1.get("port", 0)) == 7777, str(a1))
+			and int(a1.get("port", 0)) == 7777 and str(a1.get("mode", "")) == "capture",
+			str(a1))
 	var m2 := await _client()
 	m2.register_match("127.0.0.1", 7778, "europe", 3, "BER")
 	await _wait_regack(m2)

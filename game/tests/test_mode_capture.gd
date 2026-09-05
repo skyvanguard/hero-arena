@@ -1,5 +1,5 @@
 extends Node
-## Capture (CTF) mode suite (Phase 6, round 31, D17): 10 deterministic
+## Capture (CTF) mode suite (Phase 6, round 31/32, D17/D18): 17 deterministic
 ## checks over the flag state machine (setup, steal, carry-follow, drop on
 ## death, own-team re-secure, capture + return, 2nd capture wins, timeout
 ## tiebreaks, in-place reset) + a bot decision check.
@@ -172,6 +172,44 @@ func _ready() -> void:
 	check("bot: unengaged bot heads for the enemy flag (CAPTURE)",
 			dec.intent == BotDecision.Intent.CAPTURE and dg.length() <= 2.0,
 			"intent=%d dist=%.2f" % [dec.intent, dg.length()])
+	# 14) Objective pressure (D18): a fresh free flag does NOT pull the bot
+	# off its target; a stale one (free > 8 s) does.
+	await _new_world()
+	var bot2 := _char(0, Vector3(-6.0, 0.9, 0.0))
+	var prey := _char(1, Vector3(-6.0, 0.9, 3.0))  # straight ahead (fresh
+	# CharacterEntity basis faces +Z - verified by probe)
+	var perc2 := BotPerception.new()
+	add_child(perc2)
+	perc2.setup(bot2, world, BotDifficulties.by_id("normal"))
+	perc2.scan(world)
+	var dec2 := BotDecision.new()
+	add_child(dec2)
+	dec2.setup(BotDifficulties.by_id("normal"), 0)
+	dec2.decide(world, perc2, bot2)
+	check("pressure: fresh free flag keeps the bot on its target",
+			dec2.intent == BotDecision.Intent.ATTACK, "intent=%d" % dec2.intent)
+	world.flag_free_time = {0: 0.0, 1: 9.0}
+	dec2.decide(world, perc2, bot2)
+	var dg2: Vector3 = dec2.goal - world.flags[1]
+	dg2.y = 0.0
+	check("pressure: stale free flag pulls the bot off its target",
+			dec2.intent == BotDecision.Intent.CAPTURE and dg2.length() <= 2.0,
+			"intent=%d dist=%.2f" % [dec2.intent, dg2.length()])
+	# 15) The pressure clock: CaptureMode.step accumulates it while the flag
+	# is free and resets it on a steal.
+	var f0: float = world.flag_free_time[1]
+	_step(1.0)
+	check("pressure: step accumulates the free-flag clock",
+			float(world.flag_free_time[1]) > f0 + 0.9,
+			"%.2f -> %.2f" % [f0, world.flag_free_time[1]])
+	var thief4 := _char(0, world.flags[1] + Vector3(0.5, 0.0, 0.0))  # ENEMY
+	# thief: their home base is far away, so the carry persists.
+	_step(0.2)
+	_step(0.1)  # the next step sees the carrier and zeros the clock
+	check("pressure: a steal resets the clock",
+			world.flag_carrier[1] == thief4
+			and float(world.flag_free_time[1]) < 0.05,
+			"carrier=%s t=%.2f" % [str(world.flag_carrier[1] != null), world.flag_free_time[1]])
 	_done()
 
 func _done() -> void:
