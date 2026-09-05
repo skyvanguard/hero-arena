@@ -363,12 +363,12 @@ Dispatch is by first magic byte, channel-independent:
   matched the client count exactly, so the pacing is server-confirmed). This
   is the strongest broadcast-leg evidence available without two physical
   phones; the real-WiFi two-phone sign-off remains the acceptance test.
-- Full battery: 21 headless suites, 357 checks (10 pre-lobby suites at 205 +
+- Full battery: 22 headless suites, 378 checks (10 pre-lobby suites at 205 +
   test_lobby 12 (round 13) + test_net_profiles 30 + test_match_lifecycle 8
   (round 28) + test_relay 7 (round 29) + test_mode_control 15 (round 30) +
   test_mode_capture 17 + test_mode_escort 11 (rounds 31-32) + test_map 12
   (round 32) + test_results 17 (round 33) + test_vote 13 (round 34)
-  + test_mapvote 12 (round 35)). Note: under heavy machine load several net suites flake
+  + test_mapvote 12 (round 35) + test_cosmetics 21 (round 36; D22 mastery/variants are client-side - no wire changes). Note: under heavy machine load several net suites flake
   (frame-based waits vs real-time SimLink latency): test_net_profiles
   (proven pre-existing at the pristine round-30 baseline), test_net_sim
   and test_roster (observed once each under a loaded battery; green on
