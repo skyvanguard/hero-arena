@@ -11,6 +11,10 @@ var net: MatchServer
 var disc: Discovery
 var lob: LobbyClient = null
 var _team_size := 3
+var _relay: RelayClient = null
+var _relay_vport := 0
+var _pending_lobby := false
+var _lob_args: Array = []  # [lobby_addr, lregion, lname, lip]
 var _accum := 0.0
 var _lob_last_humans := -1
 var _lob_last_over := false
@@ -19,11 +23,14 @@ func _ready() -> void:
 	randomize()
 	var port := MatchConfig.net_port
 	var dport := MatchConfig.net_discovery_port
+	var relay_addr := ""
 	for a in OS.get_cmdline_user_args():
 		if a.begins_with("--port="):
 			port = int(a.substr(7))
 		elif a.begins_with("--dport="):
 			dport = int(a.substr(8))
+		elif a.begins_with("--relay="):
+			relay_addr = a.substr(8)
 	var size := clampi(MatchConfig.team_size, 1, 6)
 	world = World.new()
 	world.name = "World"
@@ -60,6 +67,18 @@ func _ready() -> void:
 				"target_score": world_ref.target_score, "time": world_ref.time}
 	add_child(disc)
 	disc.setup(dport)
+	# NAT traversal v1 (round 29, D15): --relay=ip:port registers this match
+	# in the relay over an OUTBOUND UDP connection (the only direction a NAT
+	# mapping exists for). The relay grants a virtual port; the lobby
+	# registration is deferred until then and advertises <relay_ip>:<vport>.
+	# LAN discovery is unaffected (LAN clients still reach the server
+	# directly; the relay serves clients on other networks).
+	if relay_addr != "":
+		var rparts := relay_addr.split(":")
+		_relay = RelayClient.new()
+		add_child(_relay)
+		_relay.setup(String(rparts[0]), int(rparts[1]), port)
+		_relay.registered.connect(_on_relay_registered)
 	_register_lobby(port, size)
 
 ## Optional lobby registration (Phase 5 online): --lobby=host:port advertises
@@ -67,7 +86,9 @@ func _ready() -> void:
 ## address via --lip). Godot 4.7 removed OS.get_local_ip() (no core local-IP
 ## getter remains), so --lip defaults to 127.0.0.1: pass it explicitly when
 ## clients reach this server at a different address (e.g. 10.0.2.2 for the
-## Android emulator NAT).
+## Android emulator NAT). With --relay=, the published address is the relay's
+## virtual port instead (clients on other networks reach the NAT'd server
+## through the relay; D15).
 func _register_lobby(port: int, size: int) -> void:
 	var lobby_addr := ""
 	var lregion := ""
@@ -84,24 +105,50 @@ func _register_lobby(port: int, size: int) -> void:
 			lip = a.substr(6)
 	if lobby_addr == "":
 		return
+	_lob_args = [lobby_addr, lregion, lname, lip, port, size]
+	if _relay != null and _relay_vport <= 0:
+		_pending_lobby = true
+		print("SERVER lobby: deferring registration until the relay grants a virtual port")
+		return
+	_do_lobby_register()
+
+func _on_relay_registered(vport: int) -> void:
+	_relay_vport = vport
+	if _pending_lobby:
+		_pending_lobby = false
+		_do_lobby_register()
+
+func _do_lobby_register() -> void:
+	var lobby_addr: String = String(_lob_args[0])
+	var lregion: String = String(_lob_args[1])
+	var lname: String = String(_lob_args[2])
+	var lip: String = String(_lob_args[3])
+	var port: int = int(_lob_args[4])
+	var size: int = int(_lob_args[5])
 	var parts := lobby_addr.split(":")
 	lob = LobbyClient.new()
 	add_child(lob)
 	lob.setup(String(parts[0]), int(parts[1]))
-	if lip == "":
+	var lip_f := lip
+	var port_f := port
+	if _relay != null and _relay_vport > 0:
+		# Published address = the relay's virtual port: clients connect to
+		# <relay_ip>:<vport> and the relay pumps the stream to our NAT
+		# mapping. --lip is unused in relay mode.
+		lip_f = _relay.relay_ip
+		port_f = _relay_vport
+	elif lip == "":
 		# 4.7: no OS.get_local_ip() - advertise loopback and warn; --lip is
 		# required for clients on a different network.
-		lip = "127.0.0.1"
+		lip_f = "127.0.0.1"
 		push_warning("SERVER lobby: pass --lip=<reachable ip> (OS.get_local_ip was removed in Godot 4.7)")
-	var lip_f := lip
 	var lregion_f := lregion if lregion != "" else "latam_saopaulo"
 	var lname_f := lname if lname != "" else ("match @" + lip_f)
-	var port_f := port
 	var size_f := size
 	lob.connected_ok.connect(func() -> void:
 		lob.register_match(lip_f, port_f, lregion_f, size_f, lname_f))
-	print("SERVER lobby registration at %s (advertising %s, region %s)" % [
-			lobby_addr, lip_f, lregion_f])
+	print("SERVER lobby registration at %s (advertising %s:%d, region %s)" % [
+			lobby_addr, lip_f, port_f, lregion_f])
 
 ## A fresh match started in place (MatchServer.reset_match, triggered by a
 ## join into an over match with no humans left): re-fill the bots with a

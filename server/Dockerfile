@@ -17,8 +17,14 @@
 # published ports (199/200 in 10 s).
 # Run with lobby registration (published address = the docker host's LAN IP):
 #   docker run -d --name heroarena-srv -p 7777:7777/udp -p 7778:7778/udp \
-#       heroarena/server -- --port=7777 --lobby=<lobby-ip>:7790 \
-#       --lip=<this-host-lan-ip> --lregion=latam_saopaulo --lname=demo
+#       heroarena/server res://net/server.tscn -- --port=7777 \
+#       --lobby=<lobby-ip>:7790 --lip=<this-host-lan-ip> \
+#       --lregion=latam_saopaulo --lname=demo
+# Run as the NAT-traversal RELAY (one per region is plenty for v1; see
+# core/net/relay.gd for the port layout):
+#   docker run -d --name heroarena-relay -p 7800:7800/udp \
+#       -p 7901-8156:7901-8156/udp heroarena/server \
+#       res://net/relay.tscn -- --port=7800
 #
 # Ports: 7777/udp = ENet game traffic, 7778/udp = LAN discovery.
 # ENet over UDP: no inbound TCP needed.
@@ -47,7 +53,17 @@ WORKDIR /app
 # Bake the import cache into the image (fast, deterministic container start).
 RUN godot --headless --path /app --import
 
-EXPOSE 7777/udp 7778/udp
+# 7800/udp = relay control port (res://net/relay.tscn); the relay's virtual
+# ports are 7901..8156 (core/net/relay.gd) and must be published per relay
+# deployment: -p 7901-8156:7901-8156/udp
+EXPOSE 7777/udp 7778/udp 7800/udp
 
-# server_main user args go after "--" (OS.get_cmdline_user_args contract).
-CMD ["godot", "--headless", "--path", "/app", "res://net/server.tscn", "--", "--port=7777"]
+# ENTRYPOINT + CMD convention: `docker run image [tail...]` appends [tail]
+# to the entrypoint (a bare `docker run image` keeps the default tail).
+# server_main/relay_main user args go after "--" (OS.get_cmdline_user_args
+# contract). Examples:
+#   docker run -d heroarena/server                       # 3v3 server :7777
+#   docker run -d heroarena/server res://net/server.tscn -- --port=7777 --relay=<relay-ip>:7800
+#   docker run -d heroarena/server res://net/relay.tscn -- --port=7800
+ENTRYPOINT ["godot", "--headless", "--path", "/app"]
+CMD ["res://net/server.tscn", "--", "--port=7777"]
