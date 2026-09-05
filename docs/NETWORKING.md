@@ -78,9 +78,9 @@ Dispatch is by first magic byte, channel-independent:
 | Magic | Name | Dir | Channel | Payload |
 |---|---|---|---|---|
 | `0x48` | M_HELLO | C→S | reliable | team_size u8, hero_id str, **session u32** (0 = fresh join, else slot token) |
-| `0x53` | M_SLOT | S→C | reliable | result i8 (0 ok, -1 team full, **-2 match over**), ch_id u8, team u8, team_size u8, time f32, target_score u8, match_duration f32, **token u32**, **mode_code u8** (0 TDM, 1 Control — the client builds its HUD/mirror for the mode) |
+| `0x53` | M_SLOT | S→C | reliable | result i8 (0 ok, -1 team full, **-2 match over**), ch_id u8, team u8, team_size u8, time f32, target_score u8, match_duration f32, **token u32**, **mode_code u8** (0 TDM, 1 Control, 2 Capture, 3 Escort — the client builds its HUD/mirror for the mode) |
 | `0x49` | M_INPUT | C→S | unreliable | seq u16, move (f32,f32), yaw f32, pitch f32, fire u8, edges u8, **time_est f32** (client's estimate of the server time this frame was sampled at) |
-| `0x50` | M_SNAPSHOT | S→C | unreliable | seq u16, time f32, score0/1 u8, winner u8, **control (owner u8, progress-team u8, progress u8 — D16)**, chars[], projs[] |
+| `0x50` | M_SNAPSHOT | S→C | unreliable | seq u16, time f32, score0/1 u8, winner u8, **control (owner u8, progress-team u8, progress u8 — D16)**, **ext u8×4 (mode-specific — D17)**, chars[], projs[] |
 | `0x45` | M_EVENT | S→C | reliable | type u8 + payload |
 | `0x44` | M_DISCOVER_PING | C→S | UDP discovery port | client name str |
 | `0x46` | M_DISCOVER_REPLY | S→C | UDP discovery port | state u8 (0 open, 1 full, 2 over), team_size u8, humans u8, target_score u8, game_port u16, name str, time f32 |
@@ -94,6 +94,13 @@ Dispatch is by first magic byte, channel-independent:
   the team progress runs toward (0/1, 2 none), progress 0..255. The point
   POSITION is not sent — v1 fixes it at the arena center, which the client's
   mirror arena already knows (rotating/multi-point = v2).
+- **Ext bytes (D17, Phase 6 v2)**: 4 mode-specific u8 (0 for TDM/Control).
+  Capture: ext0/ext1 = the carrier of each team's flag (0 = at base/dropped,
+  else snapshot char id + 1) — the flag's live position is the carrier's
+  position, already in the char array. Escort: ext0 = payload progress 0..255
+  along the lane, ext1 = speed 0..255 (fraction of max_speed). Flag/payload
+  LAYOUT is not sent: bases and the lane are the client's own arena
+  spawns, deterministic on both sides.
 - **Events** (reliable, for UI/feel): E_HIT=0, E_KILL=1 (names + teams +
   headshot), E_RESPAWN=2, E_MATCH_OVER=3, E_HEAL=4.
 - **Aim convention**: client sends **absolute** camera yaw/pitch; server
@@ -269,6 +276,22 @@ Dispatch is by first magic byte, channel-independent:
   clears all objective state (D14 compatibility); a bot with no target in a
   neutral control decides CAPTURE with a goal inside the circle; and 6 bots
   in a live control match start capturing within 30 s (stochastic by design).
+- `tests/test_mode_capture.tscn` — **Capture/CTF mode (round 31, 13
+  checks)**: registry; setup places flags at the CENTRAL spawns (bases);
+  enemy-in-radius steals; the carried flag follows the carrier; carrier death
+  drops the flag at the death position (through the `World.kill` ->
+  `Mode.on_kill` hook); the flag's own team re-secures a drop; an enemy flag
+  carried home scores + returns to its base (no win at 1); the 2nd capture
+  wins; tied timeout -> the enemy-flag holder, both-flags-free -> draw;
+  `World.reset()` returns flags to bases and clears carriers/captures (D14);
+  a bot with no target decides CAPTURE toward the enemy flag.
+- `tests/test_mode_escort.tscn` — **Escort mode (round 31, 11 checks)**:
+  registry; setup pins the lane from the spawn x's; idle payload; one
+  attacker pushes at max_speed with real progress; equal heads fully stop
+  it; 2v1 clamps to full speed; delivery (attackers riding the payload) wins
+  for the attackers; timeout is a defender win; `World.reset()` parks the
+  payload at the start (D14); an unengaged attacker's CAPTURE goal orbits
+  the payload on the goal side.
 - `tests/test_discovery.tscn` — UDP ping/reply over loopback (6 checks):
   open server answers with game port + state + humans, join reflected in the
   headcount, full and over states advertised (over wins over full), dead port
@@ -295,9 +318,14 @@ Dispatch is by first magic byte, channel-independent:
   matched the client count exactly, so the pacing is server-confirmed). This
   is the strongest broadcast-leg evidence available without two physical
   phones; the real-WiFi two-phone sign-off remains the acceptance test.
-- Full battery: 15 headless suites, 277 checks (10 pre-lobby suites at 205 +
+- Full battery: 17 headless suites, 301 checks (10 pre-lobby suites at 205 +
   test_lobby 12 (round 13) + test_net_profiles 30 + test_match_lifecycle 8
-  (round 28) + test_relay 7 (round 29) + test_mode_control 15 (round 30)).
+  (round 28) + test_relay 7 (round 29) + test_mode_control 15 (round 30) +
+  test_mode_capture 13 + test_mode_escort 11 (round 31)). Note: under heavy
+  machine load (~5 load avg) test_net_profiles intermittently flakes its
+  300 ms RTT reattach (real-time SimLink latency vs a frame-based wait
+  budget); the pristine round-30 baseline fails identically when loaded —
+  pre-existing, not a regression; re-run quiet for a clean sweep.
 
 ## 8. v1.1 tradeoffs (explicit)
 
