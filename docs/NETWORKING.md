@@ -311,6 +311,17 @@ Dispatch is by first magic byte, channel-independent:
   strictly increasing; PlayerProfile XP rules (win+kills+MVP multi-level-up,
   participation XP, per-hero record) and save/load roundtrip; the
   hero-select progression badge renders.
+- `tests/test_vote.tscn` — **next-match mode voting (round 34, 13 checks)**:
+  registration carries the host mode; unknown-match and bad-mode votes are
+  ignored; one vote per peer (last write wins - re-taps and vote switches
+  never inflate); split votes hold without a decision; a strict majority
+  flips the directory entry, forwards setmode to the registered match
+  server, and the server stores the pending mode; reset_match() applies the
+  voted Mode (world.mode swapped + pure-data setup) and clears the pending
+  slot; a queueing client's assign carries tally/leading/decided; the state
+  heartbeat updates the directory mode; over matches accept votes (the
+  results-screen flow). Verified on-device (emulator): results-screen vote
+  row, CAP tap, lobby ack rendered as "CAPTURE 1 · leading CAPTURE".
 - `tests/test_mode_escort.tscn` — **Escort mode (round 31, 11 checks)**:
   registry; setup pins the lane from the spawn x's; idle payload; one
   attacker pushes at max_speed with real progress; equal heads fully stop
@@ -344,11 +355,12 @@ Dispatch is by first magic byte, channel-independent:
   matched the client count exactly, so the pacing is server-confirmed). This
   is the strongest broadcast-leg evidence available without two physical
   phones; the real-WiFi two-phone sign-off remains the acceptance test.
-- Full battery: 19 headless suites, 334 checks (10 pre-lobby suites at 205 +
+- Full battery: 20 headless suites, 345 checks (10 pre-lobby suites at 205 +
   test_lobby 12 (round 13) + test_net_profiles 30 + test_match_lifecycle 8
   (round 28) + test_relay 7 (round 29) + test_mode_control 15 (round 30) +
   test_mode_capture 17 + test_mode_escort 11 (rounds 31-32) + test_map 12
-  (round 32) + test_results 17 (round 33)). Note: under heavy machine load several net suites flake
+  (round 32) + test_results 17 (round 33) + test_vote 11 (round 34)). Note:
+  under heavy machine load several net suites flake
   (frame-based waits vs real-time SimLink latency): test_net_profiles
   (proven pre-existing at the pristine round-30 baseline), test_net_sim
   and test_roster (observed once each under a loaded battery; green on
@@ -399,22 +411,48 @@ reliability**:
   RECEIVED time, not the last pong: a stale pong would re-fire the connect
   branch forever (round-13 bug, fixed).
 
-### 9.2 Message types (lobby protocol v1.2)
+### 9.2 Message types (lobby protocol v1.3, D20 voting added)
 
 | Type | Dir | Seq | Notes |
 |---|---|---|---|
-| ping / pong(at) | both | ping only | RTT echo; first ping from a new peer also triggers hello (UDP has no connect event) |
+| ping / pong(at) | both | ping only | RTT echo; first ping from a new peer also triggers hello (UDP has no connect) |
 | hello{region,matches,waiters} | s->c | - | Sent on first ping |
 | join{region,party,skill,name} | c->s | yes | Creates the waiter |
 | queue{stage,waited,open} | s->c | - | >=1 Hz while queued; doubles as keep-alive |
-| assign{host,port,match_id,region,name,mode,stage,waited} | s->c | - | mode = the match's mode id (D18: the queued client sees what it is joining; M_SLOT mode_code is authoritative once connected). Client then connects to the published game address |
-| reg{ip,port,region,team_size,name,mode} | s->s | yes | A game server registers its match (published address; mode since D18) |
+| assign{host,port,match_id,region,name,mode,tally,leading,decided,stage,waited} | s->c | - | mode = the match's mode id (D18: the queued client knows what it is joining); tally/leading/decided = the D20 vote state |
+| reg{ip,port,region,team_size,name,mode} | s->s | yes | A game server registers its match (published address + mode, D18) |
 | regack{match_id} | s->s | - | |
-| state{humans,over} | s->s | - | Live match state; ANY message from a match peer refreshes match liveness |
+| state{humans,over,mode} | s->s | - | Live match state (2 s heartbeat while the server is alive, so the entry survives the 5 s reap during long silent bot-only stretches); mode = the mode the server is actually running, so the directory reflects the voted-mode swap; ANY message from a match peer refreshes match liveness |
+| vote{match_id,mode} | c->s | no | D20: vote the match's NEXT mode. Fire-and-forget; one vote per peer per match, last write wins (re-taps/retransmits never inflate) |
+| voteresult{match_id,tally,leading,decided,mode} | s->c | - | D20: ack with the running tally; the deciding voter's own ack already shows decided=true |
+| setmode{match_id,mode} | s->s | - | D20: a strict majority decided; forwarded to the registered match server, which stores it for the next in-place match reset (a live match never changes rules mid-fight) |
 
-Peers are keyed by ip:port and reaped after 5 s of silence (matches too —
-reaping is how a crashed server's match disappears).
+### 9.2a Next-match mode voting (D20, round 34)
 
+- **Why the lobby**: the lobby is the only place that knows both the voters
+  and the match server, and it already carries the match's mode in reg/assign.
+  Voting is community pressure on the host's default, not a new authoritative
+  system: the match server validates the id (ModeRegistry.ids()) and stays the
+  rulekeeper - it only ever swaps the mode at a reset, between matches.
+- **Tally rule**: one vote per peer per match (the lobby keeps
+  vote_source{peer:mode}; a new vote retracts the previous one, so same-mode
+  re-votes are idempotent). A decision needs >= 2 votes AND a strict
+  majority. Decisions are sticky (first decision wins); re-registration
+  (server restart) starts a fresh, empty tally.
+- **Application point**: MatchServer.set_mode_from_lobby() stores
+  _pending_mode; reset_match() (the in-place new-match path, triggered by a
+  hello after the match is over) assigns the voted Mode resource and runs its
+  pure-data setup() before the scene re-fills the bots.
+- **Over matches are votable**: a vote targets the NEXT match, and the
+  server runs it in-place on the next hello (the directory entry - and its
+  vote cycle - persists across in-place resets; re-registration starts
+  fresh). Decisions are sticky per directory entry.
+- **v1 scope**: mode voting only (the four mode ids). Map voting, in-match
+  (pre-start) application, and per-party vote bundles are v2.
+- **UI**: the results screen (net + lobby matches) shows a
+  "NEXT MATCH - VOTE THE MODE" row with four buttons; the voteresult ack
+  renders the running tally / leading mode / DECIDED line. The vote lobby
+  connection lives for the results screen only (freed on continue).
 ### 9.3 Four-stage queue (party-aware, LATAM-priority)
 
 | Stage | Window | Candidate rule |
