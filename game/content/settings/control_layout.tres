@@ -1,0 +1,27 @@
+[gd_resource type="Resource" script_class="ControlLayout" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://core/input/control_layout.gd" id="1_layout"]
+
+[resource]
+script = ExtResource("1_layout")
+aim_sens = 0.0032
+joy_radius = 90.0
+aim_zone_split = 0.45
+fire_pos = Vector2(0.8828125, 0.8194444)
+fire_radius = 64.0
+fire_color = Color(0.9, 0.35, 0.3, 0.55)
+jump_pos = Vector2(0.8828125, 0.6666667)
+jump_radius = 46.0
+jump_color = Color(0.4, 0.8, 1, 0.45)
+reload_pos = Vector2(0.953125, 0.6666667)
+reload_radius = 46.0
+reload_color = Color(1, 0.8, 0.3, 0.45)
+ab1_pos = Vector2(0.8125, 0.5416667)
+ab1_radius = 30.0
+ab1_color = Color(0.6, 0.5, 1, 0.5)
+ab2_pos = Vector2(0.875, 0.5416667)
+ab2_radius = 30.0
+ab2_color = Color(0.6, 0.5, 1, 0.5)
+ult_pos = Vector2(0.9375, 0.5416667)
+ult_radius = 34.0
+ult_color = Color(1, 0.6, 0.9, 0.55)

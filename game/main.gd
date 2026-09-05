@@ -193,10 +193,16 @@ func _spawn_bot(team: int, hero_data: HeroData, spawn: Vector3) -> void:
 	bots.append(b)
 
 	if DisplayServer.get_name() != "headless":
+		# D24: desktop mouse aim honors the user's aim sensitivity.
+		ControlSettings.aim_sens_active = profile.control_settings().aim_sens
 		var di := DesktopInput.new()
 		add_child(di)
 		_match_nodes.append(di)
 		var tc := TouchControls.new()
+		# D24: the touch layer resolves from the baseline layout x the
+		# user's persisted settings (hero-select CONTROLS panel).
+		tc.layout = ControlLayout.load_layout()
+		tc.settings = profile.control_settings()
 		add_child(tc)
 		_match_nodes.append(tc)
 		var perf := PerfProbe.new()
@@ -595,8 +601,13 @@ func _start_range(hero_data: HeroData) -> void:
 		dummies.append(d)
 
 	if DisplayServer.get_name() != "headless":
+		# D24: the practice range honors the user's control settings too
+		# (same wiring as _start_match).
+		ControlSettings.aim_sens_active = profile.control_settings().aim_sens
 		add_child(DesktopInput.new())
 		var tc := TouchControls.new()
+		tc.layout = ControlLayout.load_layout()
+		tc.settings = profile.control_settings()
 		add_child(tc)
 		var perf := PerfProbe.new()
 		perf.name = "PerfProbe"

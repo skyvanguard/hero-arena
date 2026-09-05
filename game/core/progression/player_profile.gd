@@ -16,6 +16,9 @@ var wins := 0
 var per_hero: Dictionary = {}
 ## D22 cosmetic variant selection: hero_id -> palette index (0 = default).
 var variants: Dictionary = {}
+## D24 control customization (ControlSettings.to_dict(); old saves default
+## {} = stock layout).
+var controls: Dictionary = {}
 
 static func load(cfg: ProgressionConfig) -> PlayerProfile:
 	var p := PlayerProfile.new()
@@ -32,6 +35,8 @@ static func load(cfg: ProgressionConfig) -> PlayerProfile:
 			p.per_hero = d.get("per_hero", {})
 			# Old saves (pre-D22) have no variants block - default (0) wins.
 			p.variants = d.get("variants", {})
+			# Old saves (pre-D24) have no controls block - stock layout wins.
+			p.controls = d.get("controls", {})
 	return p
 
 ## Test helper: serialize this profile straight to the save path without
@@ -42,7 +47,7 @@ static func save_profile_for_test(p: PlayerProfile) -> void:
 func save() -> void:
 	var d := {"level": level, "xp": xp, "total_xp": total_xp,
 		"matches": matches, "wins": wins, "per_hero": per_hero,
-		"variants": variants}
+		"variants": variants, "controls": controls}
 	var f := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
 	if f != null:
 		f.store_string(JSON.stringify(d))
@@ -81,6 +86,18 @@ func set_variant(hero_id: String, idx: int) -> void:
 
 func selected_variant(hero_id: String) -> int:
 	return int(variants.get(hero_id, 0))
+
+## D24: read the persisted control customization (clamped, stock defaults
+## for old saves).
+func control_settings() -> ControlSettings:
+	return ControlSettings.from_dict(controls)
+
+## D24: store the control customization and persist immediately (same
+## pattern as set_variant - the settings panel edits are final on tap).
+func set_control_settings(cs: ControlSettings) -> void:
+	cs.clamp_all()
+	controls = cs.to_dict()
+	save()
 
 ## D22: per-hero mastery XP as a pure function of the stat seed (no
 ## separate store - old saves and mid-file edits can never drift).

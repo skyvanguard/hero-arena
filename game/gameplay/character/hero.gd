@@ -58,7 +58,11 @@ func step(world: World, dt: float) -> void:
 			if Controls.aim != Vector2.ZERO:
 				aim = Controls.consume_aim()
 			else:
-				aim = Input.get_last_mouse_velocity() * LOOK_SPEED
+				# D24: the desktop mouse honors the user's aim sensitivity
+				# (static data set by main from the profile - no UI types
+				# in gameplay/).
+				aim = Input.get_last_mouse_velocity() * LOOK_SPEED \
+						* ControlSettings.aim_sens_active
 			_cam_yaw -= aim.x
 			_cam_pitch = clampf(_cam_pitch - aim.y, -1.25, 0.9)
 			_apply_camera()

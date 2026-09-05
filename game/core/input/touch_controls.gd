@@ -1,15 +1,18 @@
 class_name TouchControls
 extends CanvasLayer
 ## Mobile-first touch layer (directive §11): left virtual joystick (move),
-## right-side drag (aim), FIRE / JUMP / RELOAD buttons.
-## Layout is fixed for Phase 1; per-button position/size/opacity customization
-## lands in Phase 6 (persisted layout, per ARCHITECTURE.md §3.9).
-
-const JOY_RADIUS := 90.0
-const AIM_SENS := 0.0032
-const BTN_R := 46.0
+## right-side drag (aim), action buttons. D24: the layout resolves from
+## the ControlLayout baseline (content data) x the user's ControlSettings
+## (persisted in the profile) via the pure ControlSettings.effective() -
+## position (fire side), size (button/joystick scale), opacity and aim
+## sensitivity are all customizable in the hero-select CONTROLS panel.
+## Defaults reproduce the Phase 1 hard-coded layout exactly.
 
 var active := false
+var layout: ControlLayout = null
+var settings: ControlSettings = null
+## Final resolved layout (ControlSettings.effective) - populated by build().
+var eff := {}
 var _aim_id := -1
 var _aim_prev := Vector2.ZERO
 var _joy_id := -1
@@ -25,45 +28,66 @@ func _ready() -> void:
 	if not active:
 		set_process_input(false)
 		return
-	_build()
+	build()
 
-func _build() -> void:
+## (Re)build the whole touch layer from layout x settings x viewport.
+## Public so headless tests (and a future in-game settings entry) can
+## rebuild without a device.
+func build() -> void:
+	if layout == null:
+		layout = ControlLayout.load_layout()
+	if settings == null:
+		settings = ControlSettings.new()
 	var vp := get_viewport().get_visible_rect().size
-	# Aim zone: right 55% of screen.
+	eff = ControlSettings.effective(layout, settings, vp)
+	for c in get_children():
+		c.queue_free()
 	_aim_root = Control.new()
 	_aim_root.name = "AimZone"
 	_aim_root.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_aim_root.offset_left = vp.x * 0.45
+	_aim_root.offset_left = vp.x * float(eff.aim_zone_split)
 	_aim_root.mouse_filter = Control.MOUSE_FILTER_STOP
 	_aim_root.gui_input.connect(_on_aim_input)
 	add_child(_aim_root)
-	# Joystick zone: left 45% (joystick appears where the finger lands).
+	# Joystick zone: left side (joystick appears where the finger lands).
 	_joy_root = Control.new()
 	_joy_root.name = "JoyZone"
 	_joy_root.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_joy_root.offset_right = vp.x * 0.45
+	_joy_root.offset_right = vp.x * float(eff.aim_zone_split)
 	_joy_root.mouse_filter = Control.MOUSE_FILTER_STOP
 	_joy_root.gui_input.connect(_on_joy_input)
 	add_child(_joy_root)
-	# Buttons.
-	_fire_btn = _make_button("FIRE", Vector2(vp.x - 150.0, vp.y - 130.0), 64.0,
-			Color(0.9, 0.35, 0.3, 0.55), func() -> void: pass)
-	_make_button("JUMP", Vector2(vp.x - 150.0, vp.y - 240.0), BTN_R,
-			Color(0.4, 0.8, 1.0, 0.45), func() -> void: Controls.jump = true)
-	_make_button("RELOAD", Vector2(vp.x - 60.0, vp.y - 240.0), BTN_R,
-			Color(1.0, 0.8, 0.3, 0.45), func() -> void: Controls.reload = true)
-	_make_button("Q", Vector2(vp.x - 240.0, vp.y - 330.0), 30.0,
-			Color(0.6, 0.5, 1.0, 0.5), func() -> void: Controls.ability1 = true)
-	_make_button("E", Vector2(vp.x - 160.0, vp.y - 330.0), 30.0,
-			Color(0.6, 0.5, 1.0, 0.5), func() -> void: Controls.ability2 = true)
-	_make_button("F", Vector2(vp.x - 80.0, vp.y - 330.0), 34.0,
-			Color(1.0, 0.6, 0.9, 0.55), func() -> void: Controls.ultimate = true)
+	# Buttons from the resolved layout.
+	for b in eff.buttons:
+		var id := str(b.id)
+		var c := _make_button(id, (b.center as Vector2), float(b.radius),
+				b.color as Color, _action_of(id))
+		if id == "FIRE":
+			_fire_btn = c
+	queue_redraw_zone()
 
-func _make_button(label_text: String, pos: Vector2, radius: float, color: Color,
+## Button id -> Controls action (the shared input contract).
+func _action_of(id: String) -> Callable:
+	match id:
+		"FIRE":
+			return func() -> void: pass  # fire is level-triggered on the touch itself
+		"JUMP":
+			return func() -> void: Controls.jump = true
+		"RELOAD":
+			return func() -> void: Controls.reload = true
+		"AB1":
+			return func() -> void: Controls.ability1 = true
+		"AB2":
+			return func() -> void: Controls.ability2 = true
+		"ULT":
+			return func() -> void: Controls.ultimate = true
+	return func() -> void: pass
+
+func _make_button(label_text: String, center: Vector2, radius: float, color: Color,
 		on_touched: Callable) -> Control:
 	var c := Control.new()
 	c.name = "Btn_" + label_text
-	c.position = pos - Vector2(radius, radius)
+	c.position = center - Vector2(radius, radius)
 	c.size = Vector2(radius * 2.0, radius * 2.0)
 	c.mouse_filter = Control.MOUSE_FILTER_STOP
 	c.set_meta("label", label_text)
@@ -103,9 +127,10 @@ func _on_aim_input(event: InputEvent) -> void:
 			return
 		var d := drag.position - _aim_prev
 		_aim_prev = drag.position
-		Controls.aim += d * AIM_SENS
+		Controls.aim += d * float(eff.aim_sens)
 
 func _on_joy_input(event: InputEvent) -> void:
+	var jr := float(eff.joy_radius)
 	if event is InputEventScreenTouch:
 		var t := event as InputEventScreenTouch
 		if t.pressed and _joy_id == -1:
@@ -121,18 +146,19 @@ func _on_joy_input(event: InputEvent) -> void:
 		var drag := event as InputEventScreenDrag
 		if drag.index != _joy_id:
 			return
-		var v := (drag.position - _joy_center).limit_length(JOY_RADIUS)
+		var v := (drag.position - _joy_center).limit_length(jr)
 		_joy_vec = v
-		Controls.move = Vector2(v.x / JOY_RADIUS, -v.y / JOY_RADIUS)
+		Controls.move = Vector2(v.x / jr, -v.y / jr)
 		queue_redraw_zone()
 
 func queue_redraw_zone() -> void:
-	if _joy_root:
+	if _joy_root != null:
 		_joy_root.queue_redraw()
 		_joy_root.draw.connect(func() -> void: _draw_joy(), CONNECT_ONE_SHOT)
 
 func _draw_joy() -> void:
 	if _joy_id == -1:
 		return
-	_joy_root.draw_circle(_joy_center, JOY_RADIUS, Color(1, 1, 1, 0.12))
-	_joy_root.draw_circle(_joy_center + _joy_vec, 34.0, Color(1, 1, 1, 0.35))
+	_joy_root.draw_circle(_joy_center, float(eff.joy_radius), Color(1, 1, 1, 0.12))
+	_joy_root.draw_circle(_joy_center + _joy_vec, float(eff.joy_radius) * 0.38,
+			Color(1, 1, 1, 0.35))

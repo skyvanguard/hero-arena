@@ -34,6 +34,14 @@ var progression: ProgressionConfig = null
 ## D22: cosmetic variant bank (data) + the per-card variant dot states.
 var _bank: HeroVariantBank = null
 var _variant_dots: Array = []
+## D24: control customization panel (persisted in the profile; the in-match
+## touch layer resolves baseline layout x these settings).
+var _ctl_btn: Button = null
+var _ctl_panel: Control = null
+var _ctl_settings: ControlSettings = null
+var _ctl_vals: Array = []   # {label, key, min, max} per numeric row
+var _ctl_side: Array = []   # [left_btn, right_btn] FIRE SIDE row
+var _ctl_reset: Button = null
 
 func _ready() -> void:
 	_hero = HeroRegistry.default_hero()
@@ -246,6 +254,7 @@ func _build() -> void:
 	_make_difficulty_row(vp)
 	_make_mode_row(vp)
 	_make_online_row(vp)
+	_make_controls_row(vp)
 
 func _draw_card(c: Control, hd: HeroData) -> void:
 	var selected := hd == _hero
@@ -649,3 +658,238 @@ func _on_play_online() -> void:
 	_lob_status.text = "joining queue…"
 	_lob_status.modulate = Color(0.95, 0.8, 0.4)
 	_lob_play_btn.text = "WAITING…"
+
+## D24 mobile controls customization (Phase 6 deliverable: customizable HUD
+## - position/size/sensitivity/opacity/aim settings). The CONTROLS button
+## (bottom-right, mirrored from the online row) opens a centered panel with
+## steppers; every edit persists immediately via the profile (same pattern
+## as the D22 variant taps). The in-match TouchControls builds from
+## ControlLayout (baseline) x ControlSettings (this panel) - pure
+## resolution in ControlSettings.effective(), tested headless.
+func _make_controls_row(vp: Vector2) -> void:
+	if profile == null:
+		return
+	_ctl_settings = profile.control_settings()
+	_ctl_btn = Button.new()
+	_ctl_btn.text = "CONTROLS"
+	_ctl_btn.position = Vector2(vp.x - 264.0, vp.y - 118.0)
+	_ctl_btn.size = Vector2(252.0, 30.0)
+	_ctl_btn.add_theme_font_size_override("font_size", 13)
+	_ctl_btn.pressed.connect(_toggle_controls)
+	add_child(_ctl_btn)
+	_build_controls_panel(vp)
+	_ctl_panel.visible = false
+
+func _build_controls_panel(vp: Vector2) -> void:
+	_ctl_panel = Control.new()
+	_ctl_panel.name = "ControlsPanel"
+	_ctl_panel.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_ctl_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_ctl_panel)
+	# Dim layer: tap outside the panel closes it.
+	var dim := ColorRect.new()
+	dim.color = Color(0.02, 0.03, 0.05, 0.6)
+	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
+	dim.mouse_filter = Control.MOUSE_FILTER_STOP
+	dim.gui_input.connect(func(ev: InputEvent) -> void:
+		if _ctl_tap_pressed(ev):
+			_close_controls()
+	)
+	_ctl_panel.add_child(dim)
+	# Panel box.
+	var pw := 620.0
+	var ph := 430.0
+	var px := vp.x * 0.5 - pw * 0.5
+	var py := vp.y * 0.5 - ph * 0.5
+	var box := Control.new()
+	box.name = "Box"
+	box.position = Vector2(px, py)
+	box.size = Vector2(pw, ph)
+	box.mouse_filter = Control.MOUSE_FILTER_STOP
+	box.draw.connect(func() -> void: _draw_ctl_box(box))
+	_ctl_panel.add_child(box)
+	var title := Label.new()
+	title.name = "Title"
+	title.text = "CONTROLS"
+	title.position = Vector2(0, 12)
+	title.size = Vector2(pw, 30)
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_size_override("font_size", 22)
+	title.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	box.add_child(title)
+	var x := Control.new()
+	x.name = "Close"
+	x.position = Vector2(pw - 46.0, 10.0)
+	x.size = Vector2(36.0, 36.0)
+	x.mouse_filter = Control.MOUSE_FILTER_STOP
+	x.draw.connect(func() -> void:
+		x.draw_rect(Rect2(Vector2.ZERO, x.size), Color(0.2, 0.24, 0.32, 1.0))
+		var f := ThemeDB.fallback_font
+		var sz := f.get_string_size("X", HORIZONTAL_ALIGNMENT_CENTER, -1, 18)
+		x.draw_string(f, Vector2((36.0 - sz.x) * 0.5, 24.0), "X", HORIZONTAL_ALIGNMENT_LEFT, -1, 18, Color.WHITE)
+	)
+	x.gui_input.connect(func(ev: InputEvent) -> void:
+		if _ctl_tap_pressed(ev):
+			_close_controls()
+	)
+	box.add_child(x)
+	# Numeric stepper rows (panel-relative y = 56 + i * 62).
+	var rows := [
+		{title = "AIM SENSITIVITY", key = "aim_sens", min = ControlSettings.AIM_SENS_MIN,
+				max = ControlSettings.AIM_SENS_MAX},
+		{title = "BUTTON SIZE", key = "button_scale", min = ControlSettings.SCALE_MIN,
+				max = ControlSettings.SCALE_MAX},
+		{title = "BUTTON OPACITY", key = "button_opacity", min = ControlSettings.OPACITY_MIN,
+				max = ControlSettings.OPACITY_MAX},
+		{title = "JOYSTICK SIZE", key = "joystick_scale", min = ControlSettings.SCALE_MIN,
+				max = ControlSettings.SCALE_MAX},
+	]
+	_ctl_vals = []
+	for i in rows.size():
+		var r: Dictionary = rows[i]
+		var y := 56.0 + float(i) * 62.0
+		var lab := Label.new()
+		lab.text = str(r.title)
+		lab.position = Vector2(20.0, y + 12.0)
+		lab.size = Vector2(250.0, 30.0)
+		lab.add_theme_font_size_override("font_size", 14)
+		lab.modulate = Color(0.75, 0.8, 0.9)
+		lab.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		box.add_child(lab)
+		var val := Label.new()
+		val.position = Vector2(330.0, y + 10.0)
+		val.size = Vector2(130.0, 34.0)
+		val.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		val.add_theme_font_size_override("font_size", 18)
+		val.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		box.add_child(val)
+		_ctl_vals.append({label = val, key = str(r.key), min = float(r.min),
+				max = float(r.max)})
+		_ctl_step(box, Vector2(282.0, y + 8.0), "-", str(r.key), -1.0)
+		_ctl_step(box, Vector2(466.0, y + 8.0), "+", str(r.key), 1.0)
+	# FIRE SIDE row (position customization: mirror the action cluster).
+	var sy := 56.0 + 4.0 * 62.0
+	var sside := Label.new()
+	sside.text = "FIRE SIDE"
+	sside.position = Vector2(20.0, sy + 12.0)
+	sside.size = Vector2(250.0, 30.0)
+	sside.add_theme_font_size_override("font_size", 14)
+	sside.modulate = Color(0.75, 0.8, 0.9)
+	sside.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	box.add_child(sside)
+	var bl := _ctl_side_box(Vector2(300.0, sy + 8.0), "LEFT", ControlSettings.FIRE_SIDE_LEFT)
+	var br := _ctl_side_box(Vector2(430.0, sy + 8.0), "RIGHT", ControlSettings.FIRE_SIDE_RIGHT)
+	_ctl_side = [bl, br]
+	box.add_child(bl)
+	box.add_child(br)
+	# RESET row.
+	_ctl_reset = Button.new()
+	_ctl_reset.text = "RESET TO DEFAULTS"
+	_ctl_reset.position = Vector2(20.0, sy + 74.0)
+	_ctl_reset.size = Vector2(pw - 40.0, 36.0)
+	_ctl_reset.add_theme_font_size_override("font_size", 13)
+	_ctl_reset.pressed.connect(func() -> void:
+		_ctl_settings = ControlSettings.new()
+		_ctl_commit()
+	)
+	box.add_child(_ctl_reset)
+	_ctl_refresh()
+
+## One stepper pad: a tap moves the setting one step (ControlSettings.STEP)
+## toward dir, clamps to the range, persists + refreshes the labels.
+func _ctl_step(parent: Control, pos: Vector2, glyph: String, key: String,
+		dir: float) -> void:
+	var pad := Control.new()
+	pad.position = pos
+	pad.size = Vector2(44.0, 44.0)
+	pad.mouse_filter = Control.MOUSE_FILTER_STOP
+	pad.set_meta("glyph", glyph)
+	pad.set_meta("key", key)
+	pad.set_meta("dir", dir)
+	pad.draw.connect(func() -> void: _draw_ctl_pad(pad))
+	pad.gui_input.connect(func(ev: InputEvent) -> void:
+		if _ctl_tap_pressed(ev):
+			_ctl_bump(key, dir)
+	)
+	parent.add_child(pad)
+
+func _ctl_side_box(pos: Vector2, label_text: String, side: int) -> Control:
+	var b := Control.new()
+	b.position = pos
+	b.size = Vector2(110.0, 44.0)
+	b.mouse_filter = Control.MOUSE_FILTER_STOP
+	b.set_meta("side_label", label_text)
+	b.set_meta("side", side)
+	b.draw.connect(func() -> void: _draw_ctl_side(b))
+	b.gui_input.connect(func(ev: InputEvent) -> void:
+		if _ctl_tap_pressed(ev):
+			_ctl_settings.fire_side = side
+			_ctl_commit()
+	)
+	return b
+
+var _ctl_last_bump_ms := -100000
+## A physical tap reaches the panel as an InputEventScreenTouch AND a
+## synthesized InputEventMouseButton (Godot touch->mouse emulation); without
+## this guard one tap would move a stepper two steps. Desktop mouse clicks
+## (no preceding touch) are unaffected.
+func _ctl_tap_pressed(ev: InputEvent) -> bool:
+	if not ((ev is InputEventScreenTouch and ev.pressed) or (ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT)):
+		return false
+	var now := Time.get_ticks_msec()
+	if now - _ctl_last_bump_ms < 80:
+		return false
+	_ctl_last_bump_ms = now
+	return true
+
+func _ctl_bump(key: String, dir: float) -> void:
+	for row in _ctl_vals:
+		if str(row.key) == key:
+			var cur: float = _ctl_settings.value_of(key)
+			var nv := clampf(cur + dir * ControlSettings.STEP, float(row.min), float(row.max))
+			_ctl_settings.value_set(key, nv)
+			_ctl_commit()
+			return
+
+func _ctl_commit() -> void:
+	_ctl_settings.clamp_all()
+	profile.set_control_settings(_ctl_settings)
+	_ctl_refresh()
+
+func _ctl_refresh() -> void:
+	for row in _ctl_vals:
+		(row.label as Label).text = ("%.2f" % _ctl_settings.value_of(str(row.key)))
+	for b in _ctl_side:
+		(b as Control).queue_redraw()
+
+func _toggle_controls() -> void:
+	if _ctl_panel != null:
+		_ctl_panel.visible = not _ctl_panel.visible
+
+func _close_controls() -> void:
+	if _ctl_panel != null:
+		_ctl_panel.visible = false
+
+func _draw_ctl_box(c: Control) -> void:
+	var r := Rect2(Vector2.ZERO, c.size)
+	c.draw_rect(r, Color(0.08, 0.1, 0.14, 1.0))
+	c.draw_rect(r.grow(-2.0), Color(0.3, 0.4, 0.55, 1.0), false, 2.0)
+
+func _draw_ctl_pad(c: Control) -> void:
+	c.draw_circle(Vector2(22.0, 22.0), 20.0, Color(0.16, 0.19, 0.26, 1.0))
+	c.draw_circle(Vector2(22.0, 22.0), 20.0, Color(0.35, 0.5, 0.7, 1.0), false, 1.5)
+	var f := ThemeDB.fallback_font
+	var g: String = str(c.get_meta("glyph"))
+	var sz := f.get_string_size(g, HORIZONTAL_ALIGNMENT_CENTER, -1, 22)
+	c.draw_string(f, Vector2(22.0 - sz.x * 0.5, 29.0), g, HORIZONTAL_ALIGNMENT_LEFT, -1, 22, Color.WHITE)
+
+func _draw_ctl_side(c: Control) -> void:
+	var sel: bool = int(c.get_meta("side")) == _ctl_settings.fire_side
+	var r := Rect2(Vector2.ZERO, c.size)
+	c.draw_rect(r, Color(0.35, 0.62, 1.0, 0.95) if sel else Color(0.16, 0.19, 0.26, 1.0))
+	c.draw_rect(r.grow(-1.5), Color(0.4, 0.85, 0.5, 1.0) if sel else Color(0.3, 0.36, 0.46, 1.0), false, 1.5)
+	var f := ThemeDB.fallback_font
+	var t: String = str(c.get_meta("side_label"))
+	var sz := f.get_string_size(t, HORIZONTAL_ALIGNMENT_CENTER, r.size.x, 14, 15)
+	c.draw_string(f, Vector2((r.size.x - sz.x) * 0.5, 28.0), t, HORIZONTAL_ALIGNMENT_LEFT, -1, 15, Color.WHITE)
+
