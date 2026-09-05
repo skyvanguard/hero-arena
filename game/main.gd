@@ -13,6 +13,11 @@ var _net_client: MatchClient = null
 var _accum := 0.0
 var _hero_select: HeroSelect
 var _in_range := false
+## D19 results/progression: local cosmetic account (server never reads it)
+## + the data-driven XP/level config.
+var profile: PlayerProfile = null
+var progression: ProgressionConfig = null
+var _my_hero_id := ""
 ## Everything _start_match/_start_range add to the tree, so the match can be
 ## torn down cleanly when it ends (results overlay -> hero select).
 var _match_nodes: Array = []
@@ -20,6 +25,8 @@ var _results: CanvasLayer = null
 
 func _ready() -> void:
 	randomize()
+	progression = load("res://content/progression.tres") as ProgressionConfig
+	profile = PlayerProfile.load(progression)
 	if DisplayServer.get_name() == "headless":
 		_start_match(HeroRegistry.default_hero())
 		return
@@ -41,18 +48,39 @@ func _on_net_deploy(host_port: String, hero_data: HeroData) -> void:
 	_net_client.ended.connect(_on_net_ended)
 	_net_client.setup(host_port, hero_data)
 
-func _on_net_ended(winner: int, score: Array, wtime: float, lost: bool, title: String) -> void:
+func _on_net_ended(winner: int, score: Array, wtime: float, lost: bool,
+		title: String, stats: Array) -> void:
 	# Net titles are computed by the client from my_team (offline is always
 	# team 0 and may still rely on the _show_results fallback).
-	_show_results(winner, score, wtime, title)
+	var info := {"stats": stats}
+	info["names"] = []
+	for i in stats.size():
+		var nm := ""
+		if _net_client != null and _net_client._views.has(int(i)):
+			nm = _net_client._views[int(i)].display_name
+		info["names"].append(nm + ("  (you)" if i == _net_client.my_id else ""))
+	var mvp: int = World.mvp_index(stats)
+	if _net_client != null and _net_client.my_id >= 0 and stats.size() > _net_client.my_id:
+		var row: Array = stats[_net_client.my_id]
+		info["level"] = profile.apply_match(progression, _net_client.my_hero_id,
+				winner == _net_client.my_team, int(row[1]), mvp == _net_client.my_id)
+	var ids_m: Array = ModeRegistry.ids()
+	var ids_map: Array = MapRegistry.ids()
+	var mc: int = _net_client._mode_code if _net_client != null else 0
+	var mp: int = _net_client._map_code if _net_client != null else 0
+	info["label"] = (ids_m[mc] if mc < ids_m.size() else "tdm").to_upper() \
+			+ "  ·  " + (ids_map[mp] if mp < ids_map.size() else "crossdocks").to_upper()
+	_show_results(winner, score, wtime, title, info)
 
 func _on_deploy(hero_data: HeroData) -> void:
+	_my_hero_id = hero_data.id
 	if _hero_select != null:
 		_hero_select.queue_free()
 		_hero_select = null
 	_start_match(hero_data)
 
 func _on_range(hero_data: HeroData) -> void:
+	_my_hero_id = hero_data.id
 	if _hero_select != null:
 		_hero_select.queue_free()
 		_hero_select = null
@@ -168,11 +196,29 @@ func _on_world_event(name: String, data: Dictionary) -> void:
 	if DisplayServer.get_name() == "headless":
 		get_tree().quit(0)
 		return
-	_show_results(winner, sc, wtime)
+	var stats: Array = world.stats_rows()
+	var names: Array = []
+	var my_idx: int = world.characters.find(player)
+	for i in stats.size():
+		var c: CharacterEntity = world.characters[i]
+		names.append(c.display_name + ("  (you)" if i == my_idx else ""))
+	var info := {"stats": stats, "names": names}
+	var mvp: int = World.mvp_index(stats)
+	if my_idx >= 0:
+		var row: Array = stats[my_idx]
+		info["level"] = profile.apply_match(progression, _my_hero_id, winner == 0,
+				int(row[1]), mvp == my_idx)
+	info["label"] = MatchConfig.mode_id.to_upper() \
+			+ "  ·  " + MapRegistry.get_map(MatchConfig.map_id).short_name.to_upper()
+	_show_results(winner, sc, wtime, "", info)
 
-## TDM results overlay (VICTORY/DEFEAT/DRAW + final score + duration);
-## any tap returns to the hero select.
-func _show_results(winner: int, score: Array, wtime: float, title_override := "") -> void:
+## Results overlay v1 (D19): VICTORY/DEFEAT/DRAW + final score + duration
+## + the mode/map label + a per-player stats table with the MVP marked +
+## the local player's XP gain / level. info = {stats, names, level,
+## label} (all optional; an empty info keeps the legacy minimal overlay).
+## Any tap returns to the hero select.
+func _show_results(winner: int, score: Array, wtime: float, title_override := "",
+		info: Dictionary = {}) -> void:
 	_results = CanvasLayer.new()
 	_results.layer = 100
 	add_child(_results)
@@ -217,12 +263,75 @@ func _show_results(winner: int, score: Array, wtime: float, title_override := ""
 	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	sub.add_theme_font_size_override("font_size", 34)
 	_results.add_child(sub)
+	var y := vp.y * 0.28 + 108.0
+	var label: String = str(info.get("label", ""))
+	if label != "":
+		var ml := Label.new()
+		ml.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		ml.text = label
+		ml.position = Vector2(vp.x * 0.5 - 200, y)
+		ml.size = Vector2(400, 24)
+		ml.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		ml.add_theme_font_size_override("font_size", 18)
+		ml.modulate = Color(0.65, 0.72, 0.9)
+		_results.add_child(ml)
+		y += 34.0
+	# Per-player stats table (D19): [team, kills, deaths, damage] rows, MVP
+	# marked. Team colors match the in-match HUD palette.
+	var stats: Array = info.get("stats", [])
+	var names: Array = info.get("names", [])
+	var mvp: int = World.mvp_index(stats) if stats.size() > 0 else -1
+	var rows_h := 0.0
+	if stats.size() > 0:
+		var hdr := Label.new()
+		hdr.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		hdr.text = "PLAYER                    K   D   DMG"
+		hdr.position = Vector2(vp.x * 0.5 - 230, y)
+		hdr.size = Vector2(460, 22)
+		hdr.add_theme_font_size_override("font_size", 16)
+		hdr.modulate = Color(0.55, 0.6, 0.75)
+		_results.add_child(hdr)
+		y += 24.0
+		for i in stats.size():
+			var r: Array = stats[i]
+			var row := Label.new()
+			row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			var nm: String = str(names[i]) if i < names.size() else "Player"
+			if i == mvp:
+				nm = "★ " + nm
+			row.text = "%-22s  %2d  %2d  %5d" % [nm, int(r[1]), int(r[2]), int(r[3])]
+			row.position = Vector2(vp.x * 0.5 - 230, y)
+			row.size = Vector2(460, 24)
+			row.add_theme_font_size_override("font_size", 16)
+			var tc: Color = Color(0.45, 0.75, 1.0) if int(r[0]) == 0 else Color(1.0, 0.6, 0.35)
+			if i == mvp:
+				tc = Color(1.0, 0.85, 0.4)
+			row.modulate = tc
+			_results.add_child(row)
+			y += 25.0
+		rows_h = y
+	# XP / level line (D19 local progression; cosmetic).
+	var li: Dictionary = info.get("level", {})
+	if li.size() > 0:
+		var xl := Label.new()
+		xl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		var lvl_txt := "+%.0f XP   ·   LV %d" % [float(li.get("xp_gained", 0.0)), int(li.get("level_after", 1))]
+		if int(li.get("level_after", 1)) > int(li.get("level_before", 1)):
+			lvl_txt += "   ⬆ LEVEL UP!"
+		xl.text = lvl_txt
+		xl.position = Vector2(vp.x * 0.5 - 200, y + 6)
+		xl.size = Vector2(400, 28)
+		xl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		xl.add_theme_font_size_override("font_size", 22)
+		xl.modulate = Color(0.75, 1.0, 0.75)
+		_results.add_child(xl)
+		y += 34.0
 	var hint := Label.new()
 	hint.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var mins := int(wtime) / 60
 	var secs := int(wtime) % 60
 	hint.text = "%d:%02d  ·  TAP TO CONTINUE" % [mins, secs]
-	hint.position = Vector2(vp.x * 0.5 - 160, vp.y * 0.28 + 130)
+	hint.position = Vector2(vp.x * 0.5 - 160, maxf(y + 8.0, vp.y * 0.28 + 130.0))
 	hint.size = Vector2(320, 30)
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	hint.add_theme_font_size_override("font_size", 20)
@@ -253,6 +362,8 @@ func _exit_to_select() -> void:
 	player = null
 	bots = []
 	_hero_select = HeroSelect.new()
+	_hero_select.profile = profile
+	_hero_select.progression = progression
 	add_child(_hero_select)
 	_hero_select.hero_deployed.connect(_on_deploy)
 	_hero_select.range_deployed.connect(_on_range)

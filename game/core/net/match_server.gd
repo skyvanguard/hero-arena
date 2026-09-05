@@ -423,6 +423,9 @@ func _on_world_event(name: String, data: Dictionary) -> void:
 			var sc: Array = data.score
 			buf = NetProtocol.pack_event_match_over(int(data.winner), int(sc[0]),
 					int(sc[1]), float(data.time))
+			# D19: results stats BEFORE the over event (separate reliable
+			# datagram; the client stores them for the results screen).
+			_send_all(NetProtocol.pack_stats(world.stats_rows()))
 		"heal":
 			buf = NetProtocol.pack_event_heal(_id_of(data.target),
 					_id_of(data.source), float(data.amount))

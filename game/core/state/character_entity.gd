@@ -66,6 +66,10 @@ signal died(ch: CharacterEntity, killer: CharacterEntity)
 var hp := 100.0
 var alive := true
 var death_pos := Vector3.ZERO
+## Match stats (D19 results/progression): accumulated server-side only.
+var kills := 0
+var deaths := 0
+var damage_dealt := 0.0
 var world_ref: World = null
 var controller: Node = null          # BotController or player-input node
 var is_player := false
@@ -224,6 +228,8 @@ func apply_damage(amount: float, source: CharacterEntity, is_head: bool,
 		ability.on_damage_taken(mitigated)
 	hp -= mitigated
 	_since_damage = 0.0
+	if source != null and source != self:
+		source.damage_dealt += mitigated  # D19: stats track the final amount
 	world_ref.emit_event("hit", {
 		"target" = self, "source" = source, "amount" = mitigated, "raw" = amount,
 		"is_head" = is_head, "pos" = hit_pos, "prot" = prot,

@@ -20,6 +20,7 @@ const M_SLOT := 0x53    # 'S'
 const M_INPUT := 0x49   # 'I'
 const M_SNAPSHOT := 0x50  # 'P'
 const M_EVENT := 0x45    # 'E'
+const M_STATS := 0x54    # 'T' (D19 results)
 # LAN discovery (UDP discovery port, not the ENet game port).
 const M_DISCOVER_PING := 0x44  # 'D'
 const M_DISCOVER_REPLY := 0x46 # 'F'
@@ -113,6 +114,28 @@ static func read_str(p: PackedByteArray, o: int) -> String:
 # ---- messages ----
 
 ## hello: client -> server (reliable). hero_id is the pick from the select;
+## D19 results: per-character stats in world.characters order (same index
+## convention as the snapshot char list): [team u8, kills u8, deaths u8,
+## damage u16] per row.
+static func pack_stats(rows: Array) -> PackedByteArray:
+	var b := u8(M_STATS) + u8(rows.size())
+	for r in rows:
+		b += u8(int(r[0])) + u8(clampi(int(r[1]), 0, 255)) + u8(clampi(int(r[2]), 0, 255))
+		b += u16(clampi(int(r[3]), 0, 65535))
+	return b
+
+static func unpack_stats(p: PackedByteArray) -> Array:
+	var rows: Array = []
+	var o := 1
+	var n := read_u8(p, o); o += 1
+	for i in n:
+		var team := read_u8(p, o); o += 1
+		var k := read_u8(p, o); o += 1
+		var d := read_u8(p, o); o += 1
+		var dmg := read_u16(p, o); o += 2
+		rows.append([team, k, d, dmg])
+	return rows
+
 ## session = 0 for a fresh join, or the slot token from M_SLOT to reconnect
 ## to a frozen slot (Phase 5 reconnect).
 static func pack_hello(team_size: int, hero_id: String, session: int = 0) -> PackedByteArray:

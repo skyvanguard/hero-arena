@@ -7,7 +7,7 @@ extends Node
 ## and the LOCAL character from client prediction (same controller
 ## interface as the server; reconciled against snapshots). Drop/reconnect:
 ## auto re-hello with the slot token (server freezes the slot, reattaches).
-signal ended(winner: int, score: Array, wtime: float, lost: bool, title: String)
+signal ended(winner: int, score: Array, wtime: float, lost: bool, title: String, stats: Array)
 const MAX_RECONNECTS := 6
 const PRED_STEP := 1.0 / 60.0
 ## Reconcile threshold: prediction vs server state (m). Above it the
@@ -27,6 +27,9 @@ var _host := ""
 var _port := 7777
 var _in_match := false
 var _ended := false
+## D19 results: final per-character stats (M_STATS), rows indexed by
+## world.characters order (my row = my_id).
+var _stats_rows: Array = []
 var _acc := 0.0
 var _input_interval := 1.0 / NetProtocol.INPUT_HZ
 var _seq := 0
@@ -214,6 +217,8 @@ func _on_peer_packet(_id: int, buf: PackedByteArray) -> void:
 		_on_snapshot(NetProtocol.unpack_snapshot(buf))
 	elif m == NetProtocol.M_EVENT:
 		_on_event(NetProtocol.unpack_event(buf))
+	elif m == NetProtocol.M_STATS:
+		_stats_rows = NetProtocol.unpack_stats(buf)  # D19: arrive before match_over
 
 func _enter() -> void:
 	_in_match = true
@@ -666,7 +671,7 @@ func _finish(winner: int, score: Array, wtime: float, lost: bool, title: String)
 		return
 	_ended = true
 	print("CLIENT ended: winner=%d score=%s t=%.0f lost=%s %s" % [winner, str(score), wtime, str(lost), title])
-	ended.emit(winner, score, wtime, lost, title)
+	ended.emit(winner, score, wtime, lost, title, _stats_rows)
 
 func _tx(id: int, buf: PackedByteArray, mode: int, ch: int) -> void:
 	if sim_out != null:

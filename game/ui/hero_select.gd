@@ -27,6 +27,10 @@ var _lob_status: Label = null
 var _lob_play_btn: Button = null
 var _lob_region_idx := 0
 var _lob_in_queue := false
+## D19: local cosmetic progression (main.gd passes the loaded profile + the
+## XP/level config so the badge shows level/XP/matches/wins).
+var profile: PlayerProfile = null
+var progression: ProgressionConfig = null
 
 func _ready() -> void:
 	_hero = HeroRegistry.default_hero()
@@ -72,6 +76,20 @@ func _build() -> void:
 	title.add_theme_font_size_override("font_size", 40)
 	title.modulate = Color(0.9, 0.95, 1.0)
 	add_child(title)
+
+	# D19 progression badge (cosmetic; the server never reads it).
+	if profile != null:
+		var need := progression.xp_for_level(profile.level) if progression != null else 0.0
+		var lv := Label.new()
+		lv.text = "LV %d  ·  %.0f/%.0f XP  ·  %d matches  ·  %d wins" % [
+				profile.level, profile.xp, need, profile.matches, profile.wins]
+		lv.position = Vector2(vp.x - 380.0, 10.0)
+		lv.size = Vector2(368.0, 24.0)
+		lv.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+		lv.add_theme_font_size_override("font_size", 16)
+		lv.modulate = Color(0.6, 0.75, 0.9)
+		lv.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		add_child(lv)
 
 	# Roster cards (one per registry hero; 6 slots arrive with Phase 3).
 	var n := HeroRegistry.HEROES.size()

@@ -293,6 +293,32 @@ func _finish_match(w: int) -> void:
 func world_protected(target: CharacterEntity) -> bool:
 	return time < target.protected_until
 
+## Per-character match stats for the results screen (D19), in
+## world.characters order (the same order the snapshot char list uses, so
+## the client mirror rows line up): [team, kills, deaths, damage].
+func stats_rows() -> Array:
+	var rows: Array = []
+	for ch in characters:
+		var c: CharacterEntity = ch
+		rows.append([int(c.team), int(c.kills), int(c.deaths), int(c.damage_dealt)])
+	return rows
+
+## MVP (D19): most kills, tie-break damage, tie-break lowest index; -1 when
+## the match had no kills. Pure over stats_rows so client and server agree.
+static func mvp_index(rows: Array) -> int:
+	var best := -1
+	for i in rows.size():
+		var r: Array = rows[i]
+		if best < 0:
+			best = i
+			continue
+		var b: Array = rows[best]
+		if int(r[1]) > int(b[1]) or (int(r[1]) == int(b[1]) and int(r[3]) > int(b[3])):
+			best = i
+	if best < 0 or int(rows[best][1]) == 0:
+		return -1
+	return best
+
 func damage(target: CharacterEntity, amount: float, source: CharacterEntity,
 		is_head: bool, hit_pos: Vector3) -> void:
 	if not target.alive:
@@ -307,8 +333,10 @@ func kill(target: CharacterEntity, source: CharacterEntity, is_head: bool) -> vo
 	target.alive = false
 	target.death_pos = target.global_position
 	target.death_time = time
+	target.deaths += 1
 	if source != null:
 		score[source.team] = int(score.get(source.team, 0)) + 1
+		source.kills += 1
 		if source.ability != null:
 			source.ability.on_kill()
 	# Respawn is authoritative and scheduled on the world clock (directive:
