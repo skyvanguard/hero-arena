@@ -15,6 +15,12 @@ extends Resource
 @export var mode_id := "tdm"
 @export var display_name := "Team Deathmatch"
 
+## One-time objective initialization (the match host calls this right after
+## assigning world.mode): the mode seeds the World's objective state from
+## its own @export params (bases, lanes, the control point, ...).
+func setup(world: World) -> void:
+	pass
+
 ## Per-step objective logic (World.step calls this AFTER the entities have
 ## stepped, BEFORE the over-check).
 func step(world: World, _dt: float) -> void:
@@ -23,6 +29,11 @@ func step(world: World, _dt: float) -> void:
 ## Win / timeout check. Must call world.finish_match(winner) once the
 ## condition is met (-1 = draw).
 func check_over(world: World) -> void:
+	pass
+
+## A character died (World.kill calls this after the kill event). Modes
+## that hold per-character objective state (Capture: flag drop) react here.
+func on_kill(_world: World, _killer: CharacterEntity, _victim: CharacterEntity) -> void:
 	pass
 
 ## The per-side score the HUD/snapshot should show.

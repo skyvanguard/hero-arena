@@ -25,6 +25,11 @@ func _init() -> void:
 @export var capture_radius := 4.0
 @export var target_captures := 2
 @export var vertical_tolerance := 2.0
+
+## v1: the point is fixed at the arena center (rotating/multi-point = v2).
+func setup(world: World) -> void:
+	world.control_active = true
+	world.control_point = Vector3.ZERO
 ## Where capturers aim: inside the circle, spread 120° apart per team-mate
 ## index, phase-shifted 15° between teams (bots read these from world.mode).
 @export var capture_goal_offset := 2.0

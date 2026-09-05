@@ -39,6 +39,12 @@ var _rx_ms := 0
 var _mode_code := 0
 var _control_marker_mat: StandardMaterial3D = null
 var _control_owner_shown := -2
+# Objective visuals (D17): capture flag boxes + base markers, escort payload.
+var _flag_views: Array = []
+var _flag_shown: Array = [-1, -1]
+var _payload_view: MeshInstance3D = null
+var _escort_start_x := 16.0
+var _escort_goal_x := -16.0
 var _match_duration := 300.0
 var _proj_views: Array = []   # pooled MeshInstance3D (cosmetic)
 var _last_score: Array = [0, 0]
@@ -219,6 +225,10 @@ func _enter() -> void:
 		world.control_active = true
 		world.control_point = Vector3.ZERO  # v1: fixed at arena center (wire §2)
 		_build_control_marker()
+	elif _mode_code == 2:
+		_build_capture_visuals()
+	elif _mode_code == 3:
+		_build_escort_visual()
 	_make_proj_pool()
 	hud = NetHUD.new()
 	add_child(hud)
@@ -233,6 +243,92 @@ func _enter() -> void:
 		add_child(parena)
 		_p_in = NetInput.new()
 	print("CLIENT slot %d team %d (%s)" % [my_id, my_team, my_hero_id])
+
+## Capture visuals (D17): a base marker per team (central spawn, team color)
+## + one flag box per flag that follows the CARRIER'S view (wire ext codes;
+## code 0 = at base/dropped, the base marker stands in for it - v1).
+func _build_capture_visuals() -> void:
+	var pts0: Array = world.spawn_points.get(0, [])
+	var pts1: Array = world.spawn_points.get(1, [])
+	var bases: Array = []
+	for pts in [pts0, pts1]:
+		var b: Vector3 = pts[1] if pts.size() > 1 else (pts[0] if pts.size() == 1 else Vector3(16.0, 0.9, 0.0))
+		bases.append(b)
+	var cols: Array = [Color(0.3, 0.55, 0.95, 0.5), Color(0.95, 0.35, 0.3, 0.5)]
+	for ft in 2:
+		var bm := MeshInstance3D.new()
+		var cm := CylinderMesh.new()
+		cm.top_radius = 0.5
+		cm.bottom_radius = 0.5
+		cm.height = 1.4
+		var mat := StandardMaterial3D.new()
+		mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		mat.albedo_color = cols[ft]
+		cm.material = mat
+		bm.mesh = cm
+		bm.position = Vector3(bases[ft].x, 0.7, bases[ft].z)
+		world.add_child(bm)
+		var fv := MeshInstance3D.new()
+		var fb := BoxMesh.new()
+		fb.size = Vector3(0.25, 1.1, 0.25)
+		var fmat := StandardMaterial3D.new()
+		fmat.albedo_color = cols[ft].lerp(Color.WHITE, 0.35)
+		fb.material = fmat
+		fv.mesh = fb
+		fv.visible = false
+		world.add_child(fv)
+		_flag_views.append(fv)
+
+## Escort visual (D17): the payload box; x comes from the snapshot progress
+## along the same deterministic lane the server uses (central spawn x's).
+func _build_escort_visual() -> void:
+	var pts0: Array = world.spawn_points.get(0, [])
+	var pts1: Array = world.spawn_points.get(1, [])
+	_escort_start_x = pts0[1].x if pts0.size() > 1 else 16.0
+	_escort_goal_x = pts1[1].x if pts1.size() > 1 else -16.0
+	var pv := MeshInstance3D.new()
+	var bm := BoxMesh.new()
+	bm.size = Vector3(1.6, 0.7, 1.1)
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = Color(0.95, 0.8, 0.25)
+	bm.material = mat
+	pv.mesh = bm
+	pv.position = Vector3(_escort_start_x, 0.35, 0.0)
+	world.add_child(pv)
+	_payload_view = pv
+
+func _objective_visuals(ext: Array) -> void:
+	if _mode_code == 2:
+		for ft in 2:
+			var code: int = int(ext[ft])
+			if code == _flag_shown[ft]:
+				continue
+			_flag_shown[ft] = code
+			var fv: MeshInstance3D = _flag_views[ft]
+			if code == 0:
+				fv.visible = false
+			else:
+				var view = _views.get(code - 1, null)
+				fv.visible = view != null and is_instance_valid(view)
+			if fv.visible:
+				var view2 = _views.get(code - 1, null)
+				if is_instance_valid(view2):
+					fv.global_position = view2.global_position + Vector3(0.0, 1.6, 0.0)
+	elif _mode_code == 3 and _payload_view != null:
+		var x: float = lerpf(_escort_start_x, _escort_goal_x, float(ext[0]) / 255.0)
+		_payload_view.position = Vector3(x, 0.35, 0.0)
+
+## Capture HUD (D17): one imperative line per flag situation (on-change in
+## NetHUD keeps the GL canvas quiet).
+func _hud_capture(ext: Array) -> void:
+	var enemy_code: int = int(ext[1 - my_team])
+	var own_code: int = int(ext[my_team])
+	if enemy_code == my_id + 1:
+		hud.set_control(-1, my_team, 1.0, "RETURN THE FLAG!")
+	elif own_code != 0:
+		hud.set_control(-1, 1 - my_team, 1.0, "OUR FLAG IS DOWN!")
+	else:
+		hud.set_control(-1, -1, 0.0, "STEAL THE ENEMY FLAG")
 
 ## Control point floor marker (v1: one central circle at the arena origin).
 ## Color updates only on OWNER change (GL canvas write-on-change rule).
@@ -295,8 +391,16 @@ func _on_snapshot(d: Dictionary) -> void:
 			elif own == 1:
 				c = Color(0.9, 0.3, 0.25, 0.25)
 			_control_marker_mat.albedo_color = c
+		var ext: Array = d.get("ext", [0, 0, 0, 0])
+		_objective_visuals(ext)
 		if hud != null:
-			hud.set_control(int(ctl[0]), int(ctl[1]), float(ctl[2]))
+			if _mode_code == 2:
+				_hud_capture(ext)
+			elif _mode_code == 3:
+				var pp: float = float(ext[0]) / 255.0
+				hud.set_control(-1, 0, pp, "PAYLOAD %d%%" % int(pp * 100.0))
+			else:
+				hud.set_control(int(ctl[0]), int(ctl[1]), float(ctl[2]))
 		_reconcile(d)
 
 ## Current server-time estimate (latest snapshot time + elapsed since RX).

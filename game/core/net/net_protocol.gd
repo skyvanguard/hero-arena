@@ -194,16 +194,24 @@ static func unpack_input(p: PackedByteArray) -> Dictionary:
 ## team_code u8 (the team progress runs toward: 0, 1, 2=none) + progress
 ## u8 (0..255). The control POINT POSITION is not sent: v1 fixes it at the
 ## arena center, which the client's mirror arena already knows.
+## ext (Phase 6 v2, D17): 4 mode-specific u8 bytes (0 for tdm/control):
+##   capture: ext0/ext1 = the carrier of each team's flag (0 = none, else
+##            snapshot char id + 1); a flag whose code is 0 sits at its base
+##            or is dropped (v1 clients draw the base marker only).
+##   escort:  ext0 = payload progress q8 (0..1 along the lane),
+##            ext1 = payload speed q8 (fraction of the mode's max_speed).
 ## score0/score1 carry the MODE'S score (kills in TDM, captures in
-## Control) - one number pair per side, HUD-agnostic.
+## Control/Capture, 0-0 in Escort - the winner carries the result).
 static func pack_snapshot(seq: int, time: float, score0: int, score1: int,
 		winner: int, chars: Array, projs: Array,
 		control_owner: int = -1, control_progress_team: int = -1,
-		control_progress: float = 0.0) -> PackedByteArray:
+		control_progress: float = 0.0, ext: Array = [0, 0, 0, 0]) -> PackedByteArray:
 	var b := u8(M_SNAPSHOT) + u16(seq) + f32(time) + u8(score0) + u8(score1) + u8(winner + 1)
 	b += u8(0 if control_owner < 0 else control_owner + 1)
 	b += u8(2 if control_progress_team < 0 else control_progress_team)
 	b += u8(int(clampf(control_progress, 0.0, 1.0) * 255.0))
+	for i in 4:
+		b += u8(int(clampi(int(ext[i]), 0, 255)))
 	b += u8(chars.size())
 	for c in chars:
 		b += u8(int(c.id)) + u8(int(c.team)) + u8(1 if c.alive else 0) + u8(int(c.hero_idx))
@@ -228,6 +236,10 @@ static func unpack_snapshot(p: PackedByteArray) -> Dictionary:
 	var owner_code := read_u8(p, o); o += 1
 	var team_code := read_u8(p, o); o += 1
 	var progress_q := read_u8(p, o); o += 1
+	var ext: Array = []
+	for i in 4:
+		ext.append(read_u8(p, o))
+		o += 1
 	var n := read_u8(p, o); o += 1
 	var chars: Array = []
 	for i in n:
@@ -252,6 +264,7 @@ static func unpack_snapshot(p: PackedByteArray) -> Dictionary:
 	return {"seq": seq, "time": time, "score": [s0, s1], "winner": winner,
 			"control": [owner_code - 1, 2 if team_code > 1 else team_code,
 				progress_q / 255.0],
+			"ext": ext,
 			"chars": chars, "projs": projs}
 
 # ---- LAN discovery (UDP, best-effort) ----

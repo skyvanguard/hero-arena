@@ -109,7 +109,8 @@ func set_state(s: String) -> void:
 ## Control point state (Phase 6 v1, D16). owner: -1 neutral / 0 / 1; team:
 ## the team progress runs toward (-1 none); progress 0..1. Bar = fill toward
 ## the occupying team (full + owner color when held); label names the state.
-func set_control(owner: int, team: int, progress: float) -> void:
+func set_control(owner: int, team: int, progress: float,
+		label_override: String = "") -> void:
 	var q := roundf(clampf(progress, 0.0, 1.0) * 10.0) / 10.0
 	var col := Color(0.8, 0.8, 0.9, 0.9)
 	var who: int = owner if owner >= 0 else team
@@ -117,13 +118,14 @@ func set_control(owner: int, team: int, progress: float) -> void:
 		col = Color(0.3, 0.55, 0.95, 0.95)
 	elif who == 1:
 		col = Color(0.95, 0.35, 0.3, 0.95)
-	var t := ""
-	if owner == 0:
-		t = "POINT: %s" % ("YOURS" if my_team == 0 else "ENEMY")
-	elif owner == 1:
-		t = "POINT: %s" % ("YOURS" if my_team == 1 else "ENEMY")
-	elif team >= 0:
-		t = "CAPTURE %d%%" % int(q * 100.0)
+	var t := label_override
+	if t == "":
+		if owner == 0:
+			t = "POINT: %s" % ("YOURS" if my_team == 0 else "ENEMY")
+		elif owner == 1:
+			t = "POINT: %s" % ("YOURS" if my_team == 1 else "ENEMY")
+		elif team >= 0:
+			t = "CAPTURE %d%%" % int(q * 100.0)
 	var key: Array = [owner, team, q, t]
 	if str(key) != _ctl_shown:
 		_ctl_shown = str(key)

@@ -350,16 +350,47 @@ func _send_snapshot() -> void:
 		sc = world.mode.score_of(world)  # HUD score = the mode's score
 	var buf := NetProtocol.pack_snapshot(_snap_seq, world.time,
 			int(sc[0]), int(sc[1]), world.winner, chars, projs,
-			world.control_owner, world.control_progress_team, world.control_progress)
+			world.control_owner, world.control_progress_team, world.control_progress,
+			_objective_ext())
 	_snap_seq = (_snap_seq + 1) % 65536
 	_tx(0, buf, MultiplayerPeer.TRANSFER_MODE_UNRELIABLE, NetProtocol.CH_UNRELIABLE)
 
-## M_SLOT mode_code (Phase 6, D16): 0 = TDM, 1 = Control. The client builds
-## its HUD + world mirror for the mode from this byte.
+## M_SLOT mode_code (Phase 6, D16/D17): 0 = TDM, 1 = Control, 2 = Capture,
+## 3 = Escort. The client builds its HUD + world mirror for the mode from
+## this byte.
 func _mode_code() -> int:
-	if world.mode != null and (world.mode as Mode).mode_id == "control":
-		return 1
-	return 0
+	if world.mode == null:
+		return 0
+	match (world.mode as Mode).mode_id:
+		"control":
+			return 1
+		"capture":
+			return 2
+		"escort":
+			return 3
+		_, _:
+			return 0
+
+## The 4 mode-specific snapshot bytes (wire §2, D17): flag carrier codes for
+## Capture, payload progress/speed for Escort, zeros otherwise.
+func _objective_ext() -> Array:
+	var ext: Array = [0, 0, 0, 0]
+	if world.mode == null:
+		return ext
+	match (world.mode as Mode).mode_id:
+		"capture":
+			ext[0] = _flag_carrier_code(0)
+			ext[1] = _flag_carrier_code(1)
+		"escort":
+			ext[0] = int(clampf((world.mode as EscortMode).progress_of(world), 0.0, 1.0) * 255.0)
+			ext[1] = int(clampf(world.payload_speed / maxf(0.001, (world.mode as EscortMode).max_speed), 0.0, 1.0) * 255.0)
+	return ext
+
+func _flag_carrier_code(flag_team: int) -> int:
+	var ch: CharacterEntity = world.flag_carrier[flag_team]
+	if ch == null or not is_instance_valid(ch):
+		return 0
+	return int(char_ids.get(ch, 0)) + 1
 
 func _on_world_event(name: String, data: Dictionary) -> void:
 	var buf: PackedByteArray

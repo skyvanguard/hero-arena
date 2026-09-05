@@ -45,13 +45,13 @@ func _ready() -> void:
 	add_child(world)
 	var arena := Arena.build(world)
 	add_child(arena)
-	# Mode framework v1 (Phase 6, D16): rules as a data resource. Control
-	# pins its point at the arena center (v1; rotating points = follow-up).
+	# Mode framework v1 (Phase 6, D16/D17): rules as a data resource; the
+	# mode seeds the world's objective state (control point / CTF flags /
+	# escort lane) from its own params.
 	world.mode = ModeRegistry.get_mode(MatchConfig.mode_id)
-	if world.mode != null and world.mode.mode_id == "control":
-		world.control_active = true
-		world.control_point = Vector3.ZERO
-		print("SERVER mode: control (point at arena center)")
+	if world.mode != null:
+		world.mode.setup(world)
+		print("SERVER mode: " + world.mode.mode_id)
 	net = MatchServer.new()
 	add_child(net)
 	net.setup(world, port, size)
@@ -163,7 +163,8 @@ func _do_lobby_register() -> void:
 	print("SERVER lobby registration at %s (advertising %s:%d, region %s)" % [
 			lobby_addr, lip_f, port_f, lregion_f])
 
-## --ctllog: periodic control-point state line (ops/debug; 600 frames = 10 s).
+## --ctllog: periodic objective state line (ops/debug; 600 frames = 10 s),
+## per mode.
 func _ctllog_tick() -> void:
 	if not _ctllog:
 		return
@@ -171,18 +172,37 @@ func _ctllog_tick() -> void:
 	if _ctllog_n < 600:
 		return
 	_ctllog_n = 0
-	var inside := ""
-	for c in world.characters:
-		if not c.alive:
-			continue
-		var d: Vector3 = c.global_position - world.control_point
-		if d.x * d.x + d.z * d.z <= 16.0 and absf(d.y) <= 2.0:
-			inside += str(int(c.team))
-	print("SERVER ctl t=%.1f owner=%d prog=%.2f pteam=%d cscore=%s kills=%s inside=[%s]" % [
-		world.time, world.control_owner, world.control_progress,
-		world.control_progress_team, str(world.control_score), str(world.score), inside])
-	print("SERVER ctl mode=%s active=%s over=%s target=%d dur=%.0f" % [
-		str(world.mode), world.control_active, world.match_over, world.target_score, world.match_duration])
+	var mid := "tdm"
+	if world.mode != null:
+		mid = world.mode.mode_id
+	match mid:
+		"control":
+			var inside := ""
+			for c in world.characters:
+				if not c.alive:
+					continue
+				var d: Vector3 = c.global_position - world.control_point
+				if d.x * d.x + d.z * d.z <= 16.0 and absf(d.y) <= 2.0:
+					inside += str(int(c.team))
+				print("SERVER ctl t=%.1f owner=%d prog=%.2f pteam=%d cscore=%s kills=%s inside=[%s]" % [
+					world.time, world.control_owner, world.control_progress,
+					world.control_progress_team, str(world.control_score), str(world.score), inside])
+		"capture":
+			print("SERVER ctl t=%.1f flags=[%s|%s] captures=%s over=%s" % [
+				world.time, _carrier_desc(0), _carrier_desc(1),
+				str(world.captures), world.match_over])
+		"escort":
+			print("SERVER ctl t=%.1f x=%.2f speed=%.2f/%.2f over=%s" % [
+				world.time, world.payload_pos, world.payload_speed,
+				(world.mode as EscortMode).max_speed, world.match_over])
+		_, _:
+			print("SERVER ctl mode=%s t=%.1f" % [mid, world.time])
+
+func _carrier_desc(flag_team: int) -> String:
+	var ch: CharacterEntity = world.flag_carrier[flag_team]
+	if ch == null:
+		return "free" if world.flags[flag_team].distance_to(world.flag_bases[flag_team]) < 0.01 else "DROPPED"
+	return "carried(t%d)" % int(ch.team)
 
 ## A fresh match started in place (MatchServer.reset_match, triggered by a
 ## join into an over match with no humans left): re-fill the bots with a

@@ -75,9 +75,8 @@ func _start_match(hero_data: HeroData) -> void:
 
 	# Mode framework v1 (Phase 6, D16): same resource the server uses.
 	world.mode = ModeRegistry.get_mode(MatchConfig.mode_id)
-	if world.mode != null and world.mode.mode_id == "control":
-		world.control_active = true
-		world.control_point = Vector3.ZERO
+	if world.mode != null:
+		world.mode.setup(world)
 
 	var size: int = clampi(MatchConfig.team_size, 1, 6)
 	var team0: Array = world.spawn_points.get(0, [])

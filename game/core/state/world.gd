@@ -34,6 +34,20 @@ var control_owner: int = -1
 var control_progress: float = 0.0
 var control_progress_team: int = -1
 var control_score: Dictionary = {0: 0, 1: 0}
+## Capture / CTF objective state (mode == CaptureMode, D17): fixed bases per
+## team, current flag positions, and the carrier (CharacterEntity, null =
+## at base or dropped) of each flag; per-side capture counts = the HUD score.
+var flag_bases: Dictionary = {0: Vector3.ZERO, 1: Vector3.ZERO}
+var flags: Dictionary = {0: Vector3.ZERO, 1: Vector3.ZERO}
+var flag_carrier: Dictionary = {0: null, 1: null}
+var captures: Dictionary = {0: 0, 1: 0}
+## Escort objective state (mode == EscortMode, D17): the payload's x along
+## the central lane (z fixed by the mode), its current speed, and the lane
+## endpoints (start = attacker side, goal = defender side).
+var payload_start_x := 16.0
+var payload_goal_x := -16.0
+var payload_pos := 16.0
+var payload_speed := 0.0
 ## Lag compensation (Phase 5): max rewind (s) for hitscan validation. A
 ## shooter's measured input age (CharacterEntity.net_comp_delay, set by the
 ## MatchServer from the client's server-time estimate) is clamped to this;
@@ -67,6 +81,12 @@ func reset() -> void:
 	control_progress = 0.0
 	control_progress_team = -1
 	control_score = {0: 0, 1: 0}
+	# Capture / Escort objective state (same in-place-reset rule).
+	flags = {0: flag_bases.get(0, Vector3.ZERO), 1: flag_bases.get(1, Vector3.ZERO)}
+	flag_carrier = {0: null, 1: null}
+	captures = {0: 0, 1: 0}
+	payload_pos = payload_start_x
+	payload_speed = 0.0
 
 func setup_spawn(team: int, points: Array[Vector3]) -> void:
 	spawn_points[team] = points
@@ -296,6 +316,8 @@ func kill(target: CharacterEntity, source: CharacterEntity, is_head: bool) -> vo
 		"victim_team" = target.team,
 		"headshot" = is_head,
 	})
+	if mode != null:
+		mode.on_kill(self, source, target)
 	target.hide_visual()
 
 func _make_respawn(id: int) -> Callable:

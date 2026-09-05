@@ -5,12 +5,15 @@ extends RefCounted
 ## plain Resources (no nodes) so a fresh instance per match is free and the
 ## content/balance-style "data, not code" rule holds.
 static func ids() -> Array:
-	return ["tdm", "control"]
+	return ["tdm", "control", "capture", "escort"]
 
 static func get_mode(id: String) -> Mode:
 	match id:
 		"control":
-			var c := ControlMode.new()
-			return c
+			return ControlMode.new()
+		"capture":
+			return CaptureMode.new()
+		"escort":
+			return EscortMode.new()
 		_, _:
 			return TDMMode.new()

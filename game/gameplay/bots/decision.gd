@@ -61,19 +61,18 @@ func decide(world_: World, perception_: BotPerception, hero_: CharacterEntity) -
 		goal = _flank_goal(world_, hero_, t)
 		return
 
-	# 3) Objective (Phase 6, D16): in Control, an UNENGAGED bot takes the
-	# point when our team doesn't control it. ATTACK above keeps engaged bots
-	# fighting, so the squad splits naturally (fighters + capturers); when
-	# nobody is engaged everyone converges on the point, which is exactly
-	# what a neutral point demands. The goal is a deterministic per-bot
-	# spot inside the circle so the capturers don't stack.
-	if world_.mode != null and world_.mode.mode_id == "control" \
-			and world_.control_active \
-			and world_.control_owner != hero_.team:
-		intent = Intent.CAPTURE
-		target = null
-		goal = _capture_goal(world_, hero_)
-		return
+	# 3) Objective (Phase 6, D16/D17): in an objective mode, an UNENGAGED bot
+	# takes its mode goal (Control: the point; Capture: flag logic; Escort:
+	# the payload). ATTACK above keeps engaged bots fighting, so the squad
+	# splits naturally (fighters + objective-takers). Goals are deterministic
+	# per-bot spots (no randomness on the server).
+	if world_.mode != null and world_.mode.mode_id != "tdm":
+		var og: Vector3 = _objective_goal(world_, hero_)
+		if og != Vector3.INF:
+			intent = Intent.CAPTURE
+			target = null
+			goal = og
+			return
 
 	# 4) Investigate: a heard shot (controllers weigh this highest).
 	if perception_.heard():
@@ -99,9 +98,69 @@ func decide(world_: World, perception_: BotPerception, hero_: CharacterEntity) -
 	target = null
 	goal = hero_.global_position
 
-## CAPTURE goal: a deterministic per-bot spot INSIDE the capture circle
-## (offset/spread/phase from the ControlMode resource) so the point gets
-## taken quickly without the three capturers clumping on one capsule.
+## The mode goal for an unengaged bot (INF = none: fall through to combat).
+func _objective_goal(world_: World, hero_: CharacterEntity) -> Vector3:
+	match (world_.mode as Mode).mode_id:
+		"control":
+			if world_.control_active and world_.control_owner != hero_.team:
+				return _capture_goal(world_, hero_)
+			return Vector3.INF
+		"capture":
+			return _capture_flag_goal(world_, hero_)
+		"escort":
+			return _escort_goal(world_, hero_)
+		_, _:
+			return Vector3.INF
+
+## Capture (D17): (1) I carry the enemy flag -> my base; (2) the enemy flag
+## is uncarried (base or drop) -> steal it (per-bot offset, no stacking);
+## (3) my flag is carried by the enemy -> the lowest-instance-id unengaged
+## teammate goes home, the rest keep fighting.
+func _capture_flag_goal(world_: World, hero_: CharacterEntity) -> Vector3:
+	var enemy_flag: int = 1 - int(hero_.team)
+	var enemy_carrier: CharacterEntity = world_.flag_carrier[enemy_flag]
+	if enemy_carrier == hero_:
+		return world_.flag_bases[hero_.team]
+	if enemy_carrier == null:
+		var fp: Vector3 = world_.flags[enemy_flag]
+		var a := deg_to_rad(float(_team_index(world_, hero_)) * 90.0 + 45.0)
+		return fp + Vector3(cos(a) * 1.0, 0.0, sin(a) * 1.0)
+	var own_carrier: CharacterEntity = world_.flag_carrier[hero_.team]
+	if own_carrier != null and _is_min_id_teammate(world_, hero_):
+		return world_.flag_bases[hero_.team]
+	return Vector3.INF
+
+## Escort (D17): both teams converge on the payload - attackers a step
+## AHEAD on the goal side (push), defenders a step BEHIND (brake), with a
+## deterministic per-bot z offset so the lane doesn't stack.
+func _escort_goal(world_: World, hero_: CharacterEntity) -> Vector3:
+	var dir := signf(world_.payload_goal_x - world_.payload_start_x)
+	var ahead := 2.0 if int(hero_.team) == 0 else -2.0
+	var z := float(_team_index(world_, hero_) - 1) * 2.5
+	return Vector3(world_.payload_pos + dir * ahead, 0.9, z)
+
+func _team_index(world_: World, hero_: CharacterEntity) -> int:
+	var idx := 0
+	for chx in world_.characters:
+		var ch: CharacterEntity = chx
+		if ch == hero_ or not ch.alive:
+			continue
+		if ch.team == hero_.team and ch.get_instance_id() < hero_.get_instance_id():
+			idx += 1
+	return idx
+
+func _is_min_id_teammate(world_: World, hero_: CharacterEntity) -> bool:
+	for chx in world_.characters:
+		var ch: CharacterEntity = chx
+		if ch == hero_ or not ch.alive:
+			continue
+		if ch.team == hero_.team and ch.get_instance_id() < hero_.get_instance_id():
+			return false
+	return true
+
+## Control CAPTURE goal: a deterministic per-bot spot INSIDE the capture
+## circle (offset/spread/phase from the ControlMode resource) so the point
+## gets taken quickly without the capturers clumping on one capsule.
 func _capture_goal(world_: World, hero_: CharacterEntity) -> Vector3:
 	var cm: ControlMode = world_.mode
 	var idx := 0
