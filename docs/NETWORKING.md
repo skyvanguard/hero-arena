@@ -245,6 +245,15 @@ Dispatch is by first magic byte, channel-independent:
   roster + joiner), a pre-reset token fresh-joins instead of reattaching to
   the freed character, and the fresh match steps + streams broadcast
   snapshots.
+- `tests/test_relay.tscn` — **NAT traversal v1 (round 29, 7 checks)**: one
+  relay (control 7801) in-scene; two match servers (ENet 7777/7778 + worlds +
+  6 bots each) register over outbound UDP and get distinct virtual ports;
+  two ENet clients connect to `<relay>:<vport>` exactly as NAT'd clients
+  would: slot assign per match, 10 s snapshot pacing per client (~20 Hz
+  through the pump), no cross-talk (killing client A's peer with reconnect
+  disabled freezes its stream while B keeps flowing), and a dropped client
+  with reconnect enabled re-joins its own match through the relay (token
+  reattach over the forwarded stream).
 - `tests/test_discovery.tscn` — UDP ping/reply over loopback (6 checks):
   open server answers with game port + state + humans, join reflected in the
   headcount, full and over states advertised (over wins over full), dead port
@@ -271,9 +280,9 @@ Dispatch is by first magic byte, channel-independent:
   matched the client count exactly, so the pacing is server-confirmed). This
   is the strongest broadcast-leg evidence available without two physical
   phones; the real-WiFi two-phone sign-off remains the acceptance test.
-- Full battery: 13 headless suites, 255 checks (10 pre-lobby suites at 205 +
+- Full battery: 14 headless suites, 262 checks (10 pre-lobby suites at 205 +
   test_lobby 12 (round 13) + test_net_profiles 30 + test_match_lifecycle 8
-  (both round 28)).
+  (round 28) + test_relay 7 (round 29)).
 
 ## 8. v1.1 tradeoffs (explicit)
 
@@ -354,11 +363,14 @@ gameplay balance — the magic-number rule's infra exception).
 - The lobby assigns **published server addresses**: a game server starts with
   --lobby=<host:port> --lip=<reachable IP> --lregion=<code> --lname=<name>
   and registers itself; the client's assign carries that published ip:port.
-  **NAT traversal/relay is NOT included**: --lip must be reachable from
-  joining clients (on an emulator, 10.0.2.2 = the host; a host-side process
-  must use 127.0.0.1 for its own lobby leg — 10.0.2.2 only resolves from the
-  emulator side). OS.get_local_ip() is gone in Godot 4.7, so the server is
-  told explicitly (it warns when the 127.0.0.1 default is left).
+  **Direct mode (--lip)** still applies when clients reach the server without
+  a relay (LAN, or a relay-less server): --lip must be reachable from joining
+  clients (on an emulator, 10.0.2.2 = the host; a host-side process must use
+  127.0.0.1 for its own lobby leg — 10.0.2.2 only resolves from the emulator
+  side). OS.get_local_ip() is gone in Godot 4.7, so the server is told
+  explicitly (it warns when the 127.0.0.1 default is left). **Relay mode**
+  (--relay=, §9.5) supersedes --lip: the published address becomes the relay's
+  virtual port, which is reachable by definition.
 - MatchConfig.lobby_port = 7790 default. Hero-select has an ONLINE panel:
   region cycle + live ping + PLAY -> queue -> auto-join via net_deployed
   (ENTER/SPACE offline-launch is suppressed while queued).
@@ -374,7 +386,75 @@ gameplay balance — the magic-number rule's infra exception).
   the host); `--network host` also works if you want no port mapping.
   2-core budget: docs/PERFORMANCE.md (round 27 section).
 
-### 9.5 v1 tradeoffs (explicit)
+### 9.5 NAT traversal v1: relay (round 29, D15)
+
+A match server behind a NAT cannot be dialed directly: the only mapping that
+exists points OUT (the server's own outbound connections). The relay turns
+that into a joinable address:
+
+1. The server starts with `--relay=<relay-ip>:7800` (in addition to
+   `--lobby=...`). `RelayClient` (core/net/relay_client.gd) opens an
+   **outbound** UDP socket and sends
+   `R_REG [0x52 0x47, token u32 LE, game_port u16 LE]` — the relay learns the
+   server's NAT mapping (the registration source address) and the ENet port
+   to forward to (the registration socket is a different socket from the
+   game's, so the game port must ride in the payload).
+2. The relay (core/net/relay.gd, `res://net/relay.tscn`) grants a **virtual
+   port** from 7901..8156 (256 concurrent matches — far above the 2-core
+   single-match budget; wide range so VPS port collisions are obvious) and
+   replies `R_OK [0x52 0x4F, vport u16 LE]`.
+3. Lobby registration is **deferred** until the vport is granted, and the
+   published address becomes `<relay_ip>:<vport>` — the ONLY change the
+   lobby sees. **The client protocol is untouched**: it makes a normal ENet
+   connection to the assigned address, which just happens to be a relay
+   virtual port.
+4. The relay is a headerless per-(match, client) datagram pump. Each link
+   gets one ephemeral socket, giving the two identities that NAT traversal
+   demands:
+   - client datagram → relay vport socket → forwarded via the link socket
+     (source = the link's ephemeral port) → server: the server sees every
+     relayed client from a DISTINCT source port, exactly as on a flat LAN;
+   - server reply → arrives at the link socket → forwarded via the **vport
+     socket** → client: the client sees the server AT the vport it dialed
+     (ENet binds a connection to the dialed address; a reply from any other
+     source port is dropped as an unknown peer — this was the round-29 bug
+     that kept the handshake from completing).
+   ENet's own reliability, channels, and flow control run on the forwarded
+   stream; the relay parses nothing below the two control datagrams.
+5. Liveness: `R_PING [0x52 0x50]` every 10 s keeps the server's NAT mapping
+   open even with zero clients; re-REG every 5 s until R_OK (give up after
+   10). Eviction: a match silent > 60 s loses its vport (and its links);
+   an idle link > 120 s is closed (ENet heartbeats keep live links well
+   under that).
+
+**Run:** `godot --headless --path game res://net/relay.tscn -- --port=7800`
+or the same docker image: `docker run -d --name heroarena-relay
+-p 7800:7800/udp -p 7901-8156:7901-8156/udp heroarena/server
+res://net/relay.tscn -- --port=7800` (the image moved to the ENTRYPOINT+CMD
+convention in round 29 so `docker run` args work — the old exec-form CMD
+made any run-arg replace the whole command; the round-27 lobby-run example
+in the Dockerfile header was corrected accordingly). Server: add
+`--relay=<relay-ip>:7800`. LAN discovery is unaffected (LAN clients still
+reach the server directly; the relay serves other networks).
+
+**Verified (round 29):** test_relay 7/7 (two relayed matches in parallel —
+distinct vports, slots, 10 s pacing per client, no cross-talk, reconnect
+through the relay) + a **live NAT test**: server in a docker BRIDGE container
+(real network boundary) registering in a host relay, probe client joining
+through the vport: slot assign + 199 snapshots in 10 s (~19.9 Hz) + 207
+combat events; and the FULL online flow: lobby queue → assigned
+`<relay-ip>:7901` → ENet join through the relay → slot in ~300 ms. One
+topology note from that test: the advertised host part of the address must
+be the address CLIENTS use to reach the relay (public/LAN IP of the relay
+host); a client on the relay's own host reaches it at loopback.
+
+**Follow-ups (tracked):** STUN-style address discovery (relay tells server
+its public ip so the server can auto-publish), hole-punching for
+symmetric-NAT pairs that can connect directly (relay stays as fallback),
+relay HA / multi-instance (vport space is per-instance), R_REG token auth
+(lobby-issued match secret). One relay per region is plenty for v1 scale.
+
+### 9.6 v1 tradeoffs (explicit)
 
 - JSON lines over UDP: human-readable, zero codec deps, plenty for lobby
   traffic; not binary-optimized (fine until thousands of waiters).
@@ -382,8 +462,8 @@ gameplay balance — the magic-number rule's infra exception).
   group-join handshake is deferred.
 - One lobby process per region table; multi-region deployment + redirect is a
   follow-up.
-- No NAT traversal/relay (published addresses); relay/hole-punch is a
-  separate tracked item.
+- Relay v1: one instance per region, no auth token (R_REG token = 0), no
+  hole-punching — servers behind NAT always relay (§9.5 follow-ups).
 - Skill (stage 2) recorded but unranked in v1.
 - Botfill = "any open match after 60 s" because every match bot-fills
   anyway; fewest-humans ordering is the v1 fairness choice.
