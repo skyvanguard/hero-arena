@@ -7,10 +7,13 @@ extends Node
 
 var difficulty := "normal"
 var team_size := 3   # players per side (1..6); 3v3 tuned default
-## Game mode (Phase 6 framework, D16): id from ModeRegistry.ids() — the
-## hero-select mode picker (with map voting) writes this; hosts instantiate
-## the Mode resource (server_main / main.gd). v1 ships tdm + control.
+## Game mode (Phase 6 framework, D16/D17): id from ModeRegistry.ids() —
+## the hero-select mode picker writes this; hosts instantiate the Mode
+## resource (server_main / main.gd). Ships tdm / control / capture / escort.
 var mode_id := "tdm"
+## Map (Phase 6, D18): id from MapRegistry.ids() — the hero-select map
+## picker writes this; hosts build the arena from the Map resource.
+var map_id := "crossdocks"
 
 ## TDM end condition (directive §6: 3–8 min matches). First team to
 ## target_score wins, or the higher score at match_duration. Data, not code.

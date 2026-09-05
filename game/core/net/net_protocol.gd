@@ -132,12 +132,14 @@ static func unpack_hello(p: PackedByteArray) -> Dictionary:
 ## slot: server -> client (reliable). result 0 = accepted, -1 = team full,
 ## -2 = match already over. Carries pacing values (target_score,
 ## match_duration) for the client HUD + the session token (M_HELLO.session
-## on reconnect keeps the frozen slot).
+## on reconnect keeps the frozen slot) + mode_code (D16/D17) and map_code
+## (D18: index into MapRegistry.ids() — the client builds its MIRROR arena
+## from the same Map data the server uses, so spawns/geometry agree).
 static func pack_slot(result: int, ch_id: int, team: int, team_size: int,
 		time: float, target_score: int, match_duration: float, token: int = 0,
-		mode_code: int = 0) -> PackedByteArray:
+		mode_code: int = 0, map_code: int = 0) -> PackedByteArray:
 	var b := u8(M_SLOT) + i8(result) + u8(ch_id) + u8(team) + u8(team_size)
-	b += f32(time) + u8(target_score) + f32(match_duration) + u32(token) + u8(mode_code)
+	b += f32(time) + u8(target_score) + f32(match_duration) + u32(token) + u8(mode_code) + u8(map_code)
 	return b
 
 static func unpack_slot(p: PackedByteArray) -> Dictionary:
@@ -158,9 +160,13 @@ static func unpack_slot(p: PackedByteArray) -> Dictionary:
 	var mode_code := 0
 	if p.size() >= o + 1:
 		mode_code = read_u8(p, o)
+		o += 1
+	var map_code := 0
+	if p.size() >= o + 1:
+		map_code = read_u8(p, o)
 	return {"result": r, "ch_id": ch, "team": team, "team_size": ts, "time": t,
 			"target_score": target, "match_duration": dur, "token": token,
-			"mode_code": mode_code}
+			"mode_code": mode_code, "map_code": map_code}
 
 ## input: client -> server (unreliable), INPUT_HZ.
 ## edges bitfield: 1 jump, 2 reload, 4 ability1, 8 ability2, 16 ultimate.

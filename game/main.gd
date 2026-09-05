@@ -69,11 +69,12 @@ func _start_match(hero_data: HeroData) -> void:
 	add_child(world)
 	_match_nodes.append(world)
 
-	var arena := Arena.build(world)
+	var map_data: Map = MapRegistry.get_map(MatchConfig.map_id)
+	var arena := Arena.build(world, map_data)
 	add_child(arena)
 	_match_nodes.append(arena)
 
-	# Mode framework v1 (Phase 6, D16): same resource the server uses.
+	# Mode framework v1 (Phase 6, D16/D17): same resource the server uses.
 	world.mode = ModeRegistry.get_mode(MatchConfig.mode_id)
 	if world.mode != null:
 		world.mode.setup(world)

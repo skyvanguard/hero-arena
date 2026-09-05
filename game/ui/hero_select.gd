@@ -139,6 +139,7 @@ func _build() -> void:
 	_make_practice(vp)
 	_make_join_row(vp)
 	_make_difficulty_row(vp)
+	_make_mode_row(vp)
 	_make_online_row(vp)
 
 func _draw_card(c: Control, hd: HeroData) -> void:
@@ -356,6 +357,83 @@ func _make_difficulty_row(vp: Vector2) -> void:
 		add_child(c)
 		_diff_btns.append(c)
 
+## Mode + map picker (Phase 6, D16-D18): the host's match settings. Writes
+## MatchConfig (mode_id / map_id); hosts (main.gd, server_main) read them,
+## the server advertises the mode into the lobby (reg) and both into M_SLOT.
+func _make_mode_row(vp: Vector2) -> void:
+	var lbl := Label.new()
+	lbl.text = "MODE / MAP"
+	lbl.position = Vector2(vp.x * 0.5, vp.y - 256.0)
+	lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	lbl.add_theme_font_size_override("font_size", 14)
+	lbl.modulate = Color(0.55, 0.6, 0.72)
+	add_child(lbl)
+	var items: Array = []
+	var mshort := {"tdm": "TDM", "control": "CTL", "capture": "CAP", "escort": "ESC"}
+	for mid in ModeRegistry.ids():
+		items.append(["mode", mid, mshort.get(mid, mid), 54.0])
+	for mid in MapRegistry.ids():
+		var m: Map = MapRegistry.get_map(mid)
+		items.append(["map", mid, m.short_name, 70.0])
+	var gap := 4.0
+	var total := 0.0
+	for it in items:
+		total += float(it[3]) + gap
+	var x := vp.x * 0.5 - total * 0.5 + gap * 0.5
+	for it in items:
+		var kind: String = it[0]
+		var id: String = it[1]
+		var c := Control.new()
+		c.position = Vector2(x, vp.y - 236.0)
+		c.size = Vector2(float(it[3]), 26)
+		c.mouse_filter = Control.MOUSE_FILTER_STOP
+		c.set_meta("pick_kind", kind)
+		c.set_meta("pick_id", id)
+		c.set_meta("pick_short", it[2])
+		c.draw.connect(func() -> void: _draw_pick(c))
+		c.gui_input.connect(func(ev: InputEvent) -> void:
+			if (ev is InputEventScreenTouch and ev.pressed) or (ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT):
+				if kind == "mode":
+					_pick_mode(id)
+				else:
+					_pick_map(id)
+			)
+		add_child(c)
+		_pick_btns.append(c)
+		x += float(it[3]) + gap
+
+## Named handlers (testable headless): write the pick into MatchConfig and
+## redraw the row.
+func _pick_mode(id: String) -> void:
+	if id in ModeRegistry.ids():
+		MatchConfig.mode_id = id
+	for c in _get_pick_btns():
+		c.queue_redraw()
+
+func _pick_map(id: String) -> void:
+	if id in MapRegistry.ids():
+		MatchConfig.map_id = id
+	for c in _get_pick_btns():
+		c.queue_redraw()
+
+var _pick_btns: Array = []
+
+func _get_pick_btns() -> Array:
+	return _pick_btns
+
+func _draw_pick(c: Control) -> void:
+	var kind: String = String(c.get_meta("pick_kind"))
+	var id: String = String(c.get_meta("pick_id"))
+	var sel: bool = (kind == "mode" and MatchConfig.mode_id == id) \
+			or (kind == "map" and MatchConfig.map_id == id)
+	var r := Rect2(Vector2.ZERO, c.size)
+	var fill := Color(0.16, 0.19, 0.26, 1.0) if not sel else Color(0.35, 0.62, 1.0, 0.95)
+	c.draw_rect(r, fill)
+	var f := ThemeDB.fallback_font
+	var txt: String = String(c.get_meta("pick_short"))
+	var sz := f.get_string_size(txt, HORIZONTAL_ALIGNMENT_CENTER, r.size.x, 14, 14)
+	c.draw_string(f, Vector2(r.position.x + (r.size.x - sz.x) * 0.5, r.position.y + r.size.y * 0.5 + sz.y * 0.35), txt, HORIZONTAL_ALIGNMENT_LEFT, r.size.x, 14, Color(0.95, 0.97, 1.0))
+
 func _draw_diff(c: Control) -> void:
 	var sel: bool = MatchConfig.difficulty == String(c.get_meta("diff_id"))
 	var r := Rect2(Vector2.ZERO, c.size)
@@ -447,7 +525,8 @@ func _on_lob_queue(info: Dictionary) -> void:
 func _on_lob_assign(info: Dictionary) -> void:
 	_lob_in_queue = false
 	var host_port := str(info.get("host")) + ":" + str(info.get("port"))
-	_lob_status.text = "joining " + host_port
+	var mode_s: String = str(info.get("mode", "tdm"))
+	_lob_status.text = "joining " + host_port + "  [" + mode_s + "]"
 	_lob_play_btn.text = "PLAY"
 	if _hero != null:
 		net_deployed.emit(host_port, _hero)

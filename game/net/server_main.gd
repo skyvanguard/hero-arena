@@ -32,7 +32,9 @@ func _ready() -> void:
 		elif a.begins_with("--dport="):
 			dport = int(a.substr(8))
 		elif a.begins_with("--mode="):
-			MatchConfig.mode_id = a.substr(7)  # tdm | control (ModeRegistry)
+			MatchConfig.mode_id = a.substr(7)  # ModeRegistry.ids()
+		elif a.begins_with("--map="):
+			MatchConfig.map_id = a.substr(6)   # MapRegistry.ids()
 		elif a == "--ctllog":
 			_ctllog = true
 		elif a.begins_with("--relay="):
@@ -43,7 +45,11 @@ func _ready() -> void:
 	world.target_score = MatchConfig.target_score
 	world.match_duration = MatchConfig.match_duration
 	add_child(world)
-	var arena := Arena.build(world)
+	# Map framework v1 (Phase 6, D18): the arena geometry is a data resource
+	# (content/maps/*.tres); the client's mirror arena gets the same map via
+	# the M_SLOT map_code.
+	var map_data: Map = MapRegistry.get_map(MatchConfig.map_id)
+	var arena := Arena.build(world, map_data)
 	add_child(arena)
 	# Mode framework v1 (Phase 6, D16/D17): rules as a data resource; the
 	# mode seeds the world's objective state (control point / CTF flags /
@@ -51,10 +57,11 @@ func _ready() -> void:
 	world.mode = ModeRegistry.get_mode(MatchConfig.mode_id)
 	if world.mode != null:
 		world.mode.setup(world)
-		print("SERVER mode: " + world.mode.mode_id)
+		print("SERVER mode: " + world.mode.mode_id + "  map: " + map_data.map_id)
 	net = MatchServer.new()
 	add_child(net)
 	net.setup(world, port, size)
+	net.map_id = MatchConfig.map_id
 	_team_size = size
 	net.match_reset.connect(_on_match_reset)
 	_fill_teams(size)
@@ -158,8 +165,9 @@ func _do_lobby_register() -> void:
 	var lregion_f := lregion if lregion != "" else "latam_saopaulo"
 	var lname_f := lname if lname != "" else ("match @" + lip_f)
 	var size_f := size
+	var mode_f := world.mode.mode_id if world.mode != null else "tdm"
 	lob.connected_ok.connect(func() -> void:
-		lob.register_match(lip_f, port_f, lregion_f, size_f, lname_f))
+		lob.register_match(lip_f, port_f, lregion_f, size_f, lname_f, mode_f))
 	print("SERVER lobby registration at %s (advertising %s:%d, region %s)" % [
 			lobby_addr, lip_f, port_f, lregion_f])
 

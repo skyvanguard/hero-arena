@@ -51,7 +51,21 @@ func decide(world_: World, perception_: BotPerception, hero_: CharacterEntity) -
 	else:
 		_low_hp_since = -1e9
 
-	# 2) Attack: a fresh known enemy. The goal is a flank point, not the
+	# 2) Objective pressure (Phase 6, D18): the enemy flag has been
+	# uncarried too long -> the lowest-instance-id teammate breaks away from
+	# whatever fight they are in and takes it (a stalemate in the center must
+	# not leave the flag sitting there forever; 8 s is the patience value).
+	if world_.mode is CaptureMode:
+		var ef: int = 1 - int(hero_.team)
+		if world_.flag_carrier[ef] == null \
+				and float(world_.flag_free_time.get(ef, 0.0)) > 8.0 \
+				and _is_min_id_teammate(world_, hero_):
+			intent = Intent.CAPTURE
+			target = null
+			goal = world_.flags[ef]
+			return
+
+	# 3) Attack: a fresh known enemy. The goal is a flank point, not the
 	# enemy itself: team-mates sharing a target spread laterally so the
 	# squad stops stacking on one line of fire (params.flank_spacing).
 	if fresh_t:
@@ -61,7 +75,7 @@ func decide(world_: World, perception_: BotPerception, hero_: CharacterEntity) -
 		goal = _flank_goal(world_, hero_, t)
 		return
 
-	# 3) Objective (Phase 6, D16/D17): in an objective mode, an UNENGAGED bot
+	# 4) Objective (Phase 6, D16/D17): in an objective mode, an UNENGAGED bot
 	# takes its mode goal (Control: the point; Capture: flag logic; Escort:
 	# the payload). ATTACK above keeps engaged bots fighting, so the squad
 	# splits naturally (fighters + objective-takers). Goals are deterministic
@@ -74,14 +88,14 @@ func decide(world_: World, perception_: BotPerception, hero_: CharacterEntity) -
 			goal = og
 			return
 
-	# 4) Investigate: a heard shot (controllers weigh this highest).
+	# 5) Investigate: a heard shot (controllers weigh this highest).
 	if perception_.heard():
 		intent = Intent.INVESTIGATE
 		target = t if t != null and perception_.fresh(t) else null
 		goal = perception_.heard_pos
 		return
 
-	# 5) Regroup: an ally is badly hurt (support weighs this higher), or I've
+	# 6) Regroup: an ally is badly hurt (support weighs this higher), or I've
 	# drifted out of formation while the squad is in a fight (stick/protect).
 	var threshold := params.grouping_threshold * (1.1 if role == HeroData.Role.SUPPORT else 1.0)
 	var ally := _wounded_ally(world_, hero_, threshold)
@@ -93,7 +107,7 @@ func decide(world_: World, perception_: BotPerception, hero_: CharacterEntity) -
 		goal = ally.global_position
 		return
 
-	# 6) Hold: stay put (execution does the scan turn).
+	# 7) Hold: stay put (execution does the scan turn).
 	intent = Intent.HOLD
 	target = null
 	goal = hero_.global_position

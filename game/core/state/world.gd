@@ -41,6 +41,10 @@ var flag_bases: Dictionary = {0: Vector3.ZERO, 1: Vector3.ZERO}
 var flags: Dictionary = {0: Vector3.ZERO, 1: Vector3.ZERO}
 var flag_carrier: Dictionary = {0: null, 1: null}
 var captures: Dictionary = {0: 0, 1: 0}
+## Seconds each flag has spent UNcarried (CaptureMode, D18 objective
+## pressure: a stale free flag pulls the designated teammate off their
+## fight). Reset with the rest of the capture state.
+var flag_free_time: Dictionary = {0: 0.0, 1: 0.0}
 ## Escort objective state (mode == EscortMode, D17): the payload's x along
 ## the central lane (z fixed by the mode), its current speed, and the lane
 ## endpoints (start = attacker side, goal = defender side).
@@ -85,6 +89,7 @@ func reset() -> void:
 	flags = {0: flag_bases.get(0, Vector3.ZERO), 1: flag_bases.get(1, Vector3.ZERO)}
 	flag_carrier = {0: null, 1: null}
 	captures = {0: 0, 1: 0}
+	flag_free_time = {0: 0.0, 1: 0.0}
 	payload_pos = payload_start_x
 	payload_speed = 0.0
 

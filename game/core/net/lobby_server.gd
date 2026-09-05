@@ -174,6 +174,7 @@ func _dispatch(key: String, msg: Dictionary) -> void:
 				humans = 0,
 				over = false,
 				name = str(msg.get("name", "match")),
+				mode = str(msg.get("mode", "tdm")),
 				last_seen = time,
 			}
 			_send(key, {t = LobbyProtocol.T_REGACK, match_id = id})
@@ -289,7 +290,7 @@ func _run_queue() -> void:
 			_send(str(key), {
 				t = LobbyProtocol.T_ASSIGN,
 				host = str(m.ip), port = int(m.port), match_id = int(pick.id),
-				region = str(m.region), name = str(m.name),
+				region = str(m.region), name = str(m.name), mode = str(m.mode),
 				stage = stage, waited = time - float(w.joined_at),
 			})
 			client_assigned.emit({host = str(m.ip), port = int(m.port),

@@ -22,6 +22,7 @@ func setup(world: World) -> void:
 	world.flags = {0: world.flag_bases[0], 1: world.flag_bases[1]}
 	world.flag_carrier = {0: null, 1: null}
 	world.captures = {0: 0, 1: 0}
+	world.flag_free_time = {0: 0.0, 1: 0.0}
 
 ## A team's base = its CENTRAL spawn point (index 1 of the arena's 3
 ## spawn z-rows), falling back to the side center.
@@ -33,9 +34,15 @@ func _base_of(world: World, team: int) -> Vector3:
 		return pts[0]
 	return Vector3(16.0 if team == 0 else -16.0, 0.9, 0.0)
 
-func step(world: World, _dt: float) -> void:
+func step(world: World, dt: float) -> void:
 	if world.match_over:
 		return
+	# Objective pressure clock (D18): how long each flag has sat uncarried.
+	for ft in 2:
+		if world.flag_carrier[ft] == null:
+			world.flag_free_time[ft] = float(world.flag_free_time.get(ft, 0.0)) + dt
+		else:
+			world.flag_free_time[ft] = 0.0
 	for team in 2:
 		var carrier: CharacterEntity = world.flag_carrier[team]
 		if carrier != null:
@@ -46,6 +53,7 @@ func step(world: World, _dt: float) -> void:
 				# covers a freed carrier (tests) without a kill event.
 				world.flag_carrier[team] = null
 		# Steal / re-secure: any live non-carrier character in the circle.
+		var picked_this_step := false
 		if world.flag_carrier[team] == null:
 			var fp: Vector3 = world.flags[team]
 			for ch in world.characters:
@@ -57,14 +65,17 @@ func step(world: World, _dt: float) -> void:
 					continue
 				if d.x * d.x + d.z * d.z <= steal_radius * steal_radius:
 					world.flag_carrier[team] = c
+					picked_this_step = true
 					world.emit_event("flag_stolen", {
 						"flag": team, "carrier": c.team,
 						"pos": c.global_position, "time": world.time,
 					})
 					break
 		# Return: the carrier of a flag reaches the CARRIER's own base.
+		# A FRESH pick is not returned in the same step (a teammate re-securing
+		# their own flag at the base must be able to carry it away).
 		var back: CharacterEntity = world.flag_carrier[team]
-		if back != null and is_instance_valid(back) and back.alive:
+		if back != null and not picked_this_step and is_instance_valid(back) and back.alive:
 			var home: Vector3 = world.flag_bases[back.team]
 			var d2: Vector3 = back.global_position - home
 			if d2.x * d2.x + d2.z * d2.z <= base_radius * base_radius:

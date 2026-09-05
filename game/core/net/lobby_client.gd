@@ -64,13 +64,17 @@ func setup(h: String, p: int) -> void:
 	_ping_acc = _ping_every  # force a ping on the first pump
 
 ## Start the match-server registration (with retransmit until regack).
+## mode (D18): the match's mode id, surfaced in the lobby's assign so a
+## queued client knows what it is joining (M_SLOT mode_code stays
+## authoritative once connected).
 func register_match(ip: String, game_port: int, region: String,
-		team_size: int, name: String) -> void:
+		team_size: int, name: String, mode: String = "tdm") -> void:
 	if _seq_reg > 0 and not _pending_reg.is_empty():
 		return  # already registered / in flight
 	_seq_reg += 1
 	var m := {t = LobbyProtocol.T_REG, seq = _seq_reg, ip = ip,
-			port = game_port, region = region, team_size = team_size, name = name}
+			port = game_port, region = region, team_size = team_size, name = name,
+			mode = mode}
 	_pending_reg = {msg = m, next_at = Time.get_ticks_msec()}
 	_put(m)
 

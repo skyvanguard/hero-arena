@@ -37,6 +37,7 @@ var _ring: Array = []         # last 4 snapshots
 var _ring_times: Array = []   # parallel server-times
 var _rx_ms := 0
 var _mode_code := 0
+var _map_code := 0
 var _control_marker_mat: StandardMaterial3D = null
 var _control_owner_shown := -2
 # Objective visuals (D17): capture flag boxes + base markers, escort payload.
@@ -200,6 +201,7 @@ func _on_peer_packet(_id: int, buf: PackedByteArray) -> void:
 		my_team = int(d.team)
 		_match_duration = float(d.match_duration)
 		_mode_code = int(d.get("mode_code", 0))
+		_map_code = int(d.get("map_code", 0))
 		if world == null:
 			_enter()
 		else:
@@ -219,7 +221,11 @@ func _enter() -> void:
 	world = World.new()
 	world.name = "World"
 	add_child(world)
-	var arena := Arena.build(world)
+	# Mirror arena from the SERVER's map (M_SLOT map_code, D18) so spawns and
+	# geometry match the authoritative world.
+	var ids: Array = MapRegistry.ids()
+	var mid: String = ids[_map_code] if _map_code < ids.size() else MapRegistry.DEFAULT_ID
+	var arena := Arena.build(world, MapRegistry.get_map(mid))
 	add_child(arena)
 	if _mode_code == 1:
 		world.control_active = true

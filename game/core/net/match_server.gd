@@ -36,6 +36,10 @@ var _snap_interval := 1.0 / NetProtocol.SNAPSHOT_HZ
 
 var _started := false
 
+## The map id this server runs (D18) — packed into M_SLOT as map_code so
+## the client's mirror arena matches the server's geometry.
+var map_id := "crossdocks"
+
 func setup(w: World, p: int, ts: int) -> void:
 	world = w
 	port = p
@@ -129,7 +133,7 @@ func _on_hello(from: int, d: Dictionary) -> void:
 			# Other humans are still connected (watching the final): v1 has
 			# no mid-observation reset - reject with the over code.
 			_send_to(from, NetProtocol.pack_slot(-2, 0, 0, team_size, world.time,
-					world.target_score, world.match_duration, 0, _mode_code()))
+					world.target_score, world.match_duration, 0, _mode_code(), _map_code()))
 			print("SERVER peer %d rejected: match over" % from)
 			return
 	if session != 0 and _frozen.has(session) and not world.match_over:
@@ -145,7 +149,7 @@ func _on_hello(from: int, d: Dictionary) -> void:
 	var team := 0 if team_humans[0] <= team_humans[1] else 1
 	if team_humans[team] >= team_size:
 		_send_to(from, NetProtocol.pack_slot(-1, 0, 0, team_size, world.time,
-				world.target_score, world.match_duration, 0, _mode_code()))
+				world.target_score, world.match_duration, 0, _mode_code(), _map_code()))
 		print("SERVER peer %d rejected: team full" % from)
 		return
 	# A bot-filled slot yields to the human (bot fill is pre-spawned).
@@ -189,7 +193,7 @@ func _on_hello(from: int, d: Dictionary) -> void:
 		token = token, last_seq = -1, delay = 0.0}
 	print("SERVER peer %d -> %s slot %d team %d" % [from, hero_data.id, int(char_ids[ch]), team])
 	_send_to(from, NetProtocol.pack_slot(0, int(char_ids[ch]), team, team_size,
-			world.time, world.target_score, world.match_duration, token, _mode_code()))
+			world.time, world.target_score, world.match_duration, token, _mode_code(), _map_code()))
 
 func _on_input(from: int, buf: PackedByteArray) -> void:
 	var s: Dictionary = slots.get(from, {})
@@ -302,7 +306,7 @@ func _reattach(from: int, token: int) -> bool:
 		int(char_ids.get(ch, -1)), int(f.team)])
 	_send_to(from, NetProtocol.pack_slot(0, int(char_ids.get(ch, 0)), int(f.team),
 			team_size, world.time, world.target_score, world.match_duration, token,
-			_mode_code()))
+			_mode_code(), _map_code()))
 	return true
 
 func _free_character(ch: CharacterEntity) -> void:
@@ -391,6 +395,13 @@ func _flag_carrier_code(flag_team: int) -> int:
 	if ch == null or not is_instance_valid(ch):
 		return 0
 	return int(char_ids.get(ch, 0)) + 1
+
+## M_SLOT map_code (D18): index into MapRegistry.ids() for the client's
+## mirror arena.
+func _map_code() -> int:
+	var ids: Array = MapRegistry.ids()
+	var i := ids.find(map_id)
+	return i if i >= 0 else 0
 
 func _on_world_event(name: String, data: Dictionary) -> void:
 	var buf: PackedByteArray
