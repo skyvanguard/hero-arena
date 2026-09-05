@@ -125,6 +125,12 @@ Dispatch is by first magic byte, channel-independent:
   - **move** magnitude clamped to 1.0 (client lies about the joystick),
     **yaw** wrapped to [-π, π], **pitch** clamped to [-1.25, 0.9] rad
     (content/balance owns the real aim range; the clamp is a sanity bound).
+- **aim is client-scaled (D24)**: the touch layer multiplies the drag by the
+    user's effective sensitivity (ControlLayout baseline x ControlSettings,
+    resolved in ControlSettings.effective) before sending; the server treats
+    the aim delta like any other client claim - the pitch clamp above is the
+    bound. Sensitivity is an ergonomic, per-device local setting: no wire
+    field, no P2W.
   - **Latency estimate**: `time_est` → server measures one-way input age
     `clamp(server_time - time_est, 0, lag_comp_window)` and stores it as
     the character's `net_comp_delay` (feeds lag-comp, `§6`).
@@ -363,13 +369,16 @@ Dispatch is by first magic byte, channel-independent:
   matched the client count exactly, so the pacing is server-confirmed). This
   is the strongest broadcast-leg evidence available without two physical
   phones; the real-WiFi two-phone sign-off remains the acceptance test.
-- Full battery: 23 headless suites, 398 checks (10 pre-lobby suites at 205 +
-  test_lobby 12 (round 13) + test_net_profiles 30 + test_match_lifecycle 8
-  (round 28) + test_relay 7 (round 29) + test_mode_control 15 (round 30) +
-  test_mode_capture 17 + test_mode_escort 11 (rounds 31-32) + test_map 12
-  (round 32) + test_results 18 (round 33; +1 round 36 regression) + test_vote 13
-  (round 34) + test_mapvote 12 (round 35) + test_cosmetics 21 (round 36; D22
-  mastery/variants are client-side - no wire changes). Note: under heavy machine load several net suites flake
+- Full battery: 24 headless suites, 426 checks (round-38 per-suite counts:
+  hero 42 + main 16 + roster 57 + bots 23 + projectile 10 + practice 11 +
+  map 12 + mode_control 15 (round 30) + mode_capture 17 + mode_escort 11
+  (rounds 31-32) + net 10 + net_props 20 + net_sim 10 + net_profiles 30 +
+  lobby 12 (round 13) + match_lifecycle 8 (round 28) + relay 7 (round 29) +
+  results 18 (round 33; +1 round 36 regression) + vote 13 (round 34) +
+  mapvote 12 (round 35) + cosmetics 21 (round 36; D22 mastery/variants are
+  client-side - no wire changes) + partyvote 20 (round 37; D23 weighted
+  voting, real UDP lobby) + controls 25 (round 38; D24 layout x settings,
+  headless-resolved) + discovery 6). Note: under heavy machine load several net suites flake
   (frame-based waits vs real-time SimLink latency): test_net_profiles
   (proven pre-existing at the pristine round-30 baseline), test_net_sim
   and test_roster (observed once each under a loaded battery; green on
