@@ -177,6 +177,14 @@ func _e2e() -> void:
 		await _frames(5)
 	await _frames(60)
 	var my_idx: int = _w2.characters.find(_human)
+	# The match character id is monotonic (bot fill took 0..3, the human got
+	# id 4) and is NOT a row index - the client must map it through the
+	# snapshot character order (round 36 regression: the net results screen
+	# never applied XP / marked "(you)" because of this off-by-one).
+	check("e2e: client maps my_id to the stats row index (snapshot order)",
+			client.stats_index_of(client.my_id) == my_idx,
+			"my_id=%d mapped=%d truth=%d" % [client.my_id,
+			client.stats_index_of(client.my_id), my_idx])
 	check("e2e: M_STATS arrived before match_over with the final table",
 			client._stats_rows.size() == _w2.characters.size()
 			and int(client._stats_rows[my_idx][1]) == 2
