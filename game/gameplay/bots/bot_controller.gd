@@ -62,6 +62,8 @@ func step(world_: World, dt: float) -> void:
 	match decision.intent:
 		BotDecision.Intent.ATTACK:
 			_execute_attack(dt)
+		BotDecision.Intent.CAPTURE:
+			_execute_move_to(decision.goal, dt, false)  # capturers don't shoot mid-walk
 		BotDecision.Intent.INVESTIGATE:
 			_execute_move_to(decision.goal, dt, false)
 		BotDecision.Intent.REGROUP:

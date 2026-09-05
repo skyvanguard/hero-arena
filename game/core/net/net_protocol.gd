@@ -134,9 +134,10 @@ static func unpack_hello(p: PackedByteArray) -> Dictionary:
 ## match_duration) for the client HUD + the session token (M_HELLO.session
 ## on reconnect keeps the frozen slot).
 static func pack_slot(result: int, ch_id: int, team: int, team_size: int,
-		time: float, target_score: int, match_duration: float, token: int = 0) -> PackedByteArray:
+		time: float, target_score: int, match_duration: float, token: int = 0,
+		mode_code: int = 0) -> PackedByteArray:
 	var b := u8(M_SLOT) + i8(result) + u8(ch_id) + u8(team) + u8(team_size)
-	b += f32(time) + u8(target_score) + f32(match_duration) + u32(token)
+	b += f32(time) + u8(target_score) + f32(match_duration) + u32(token) + u8(mode_code)
 	return b
 
 static func unpack_slot(p: PackedByteArray) -> Dictionary:
@@ -153,8 +154,13 @@ static func unpack_slot(p: PackedByteArray) -> Dictionary:
 	var token := 0
 	if p.size() >= o + 4:
 		token = read_u32(p, o)
+		o += 4
+	var mode_code := 0
+	if p.size() >= o + 1:
+		mode_code = read_u8(p, o)
 	return {"result": r, "ch_id": ch, "team": team, "team_size": ts, "time": t,
-			"target_score": target, "match_duration": dur, "token": token}
+			"target_score": target, "match_duration": dur, "token": token,
+			"mode_code": mode_code}
 
 ## input: client -> server (unreliable), INPUT_HZ.
 ## edges bitfield: 1 jump, 2 reload, 4 ability1, 8 ability2, 16 ultimate.
@@ -184,9 +190,20 @@ static func unpack_input(p: PackedByteArray) -> Dictionary:
 ## snapshot: server -> all clients (unreliable), SNAPSHOT_HZ.
 ## char dict: {id, team, alive, hero_idx, pos(Vector3), rot_y, hp, max_hp}
 ## proj dict: {owner(id), pos(Vector3), dir(Vector3)}
+## control (Phase 6 v1, D16): owner_code u8 (0=none, 1=team0, 2=team1) +
+## team_code u8 (the team progress runs toward: 0, 1, 2=none) + progress
+## u8 (0..255). The control POINT POSITION is not sent: v1 fixes it at the
+## arena center, which the client's mirror arena already knows.
+## score0/score1 carry the MODE'S score (kills in TDM, captures in
+## Control) - one number pair per side, HUD-agnostic.
 static func pack_snapshot(seq: int, time: float, score0: int, score1: int,
-		winner: int, chars: Array, projs: Array) -> PackedByteArray:
+		winner: int, chars: Array, projs: Array,
+		control_owner: int = -1, control_progress_team: int = -1,
+		control_progress: float = 0.0) -> PackedByteArray:
 	var b := u8(M_SNAPSHOT) + u16(seq) + f32(time) + u8(score0) + u8(score1) + u8(winner + 1)
+	b += u8(0 if control_owner < 0 else control_owner + 1)
+	b += u8(2 if control_progress_team < 0 else control_progress_team)
+	b += u8(int(clampf(control_progress, 0.0, 1.0) * 255.0))
 	b += u8(chars.size())
 	for c in chars:
 		b += u8(int(c.id)) + u8(int(c.team)) + u8(1 if c.alive else 0) + u8(int(c.hero_idx))
@@ -208,6 +225,9 @@ static func unpack_snapshot(p: PackedByteArray) -> Dictionary:
 	var s0 := read_u8(p, o); o += 1
 	var s1 := read_u8(p, o); o += 1
 	var winner := read_u8(p, o) - 1; o += 1
+	var owner_code := read_u8(p, o); o += 1
+	var team_code := read_u8(p, o); o += 1
+	var progress_q := read_u8(p, o); o += 1
 	var n := read_u8(p, o); o += 1
 	var chars: Array = []
 	for i in n:
@@ -230,6 +250,8 @@ static func unpack_snapshot(p: PackedByteArray) -> Dictionary:
 		pr.dir = Vector3(_f32_at(p, o), _f32_at(p, o + 4), _f32_at(p, o + 8)); o += 12
 		projs.append(pr)
 	return {"seq": seq, "time": time, "score": [s0, s1], "winner": winner,
+			"control": [owner_code - 1, 2 if team_code > 1 else team_code,
+				progress_q / 255.0],
 			"chars": chars, "projs": projs}
 
 # ---- LAN discovery (UDP, best-effort) ----

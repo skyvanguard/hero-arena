@@ -7,6 +7,10 @@ extends Node
 
 var difficulty := "normal"
 var team_size := 3   # players per side (1..6); 3v3 tuned default
+## Game mode (Phase 6 framework, D16): id from ModeRegistry.ids() — the
+## hero-select mode picker (with map voting) writes this; hosts instantiate
+## the Mode resource (server_main / main.gd). v1 ships tdm + control.
+var mode_id := "tdm"
 
 ## TDM end condition (directive §6: 3–8 min matches). First team to
 ## target_score wins, or the higher score at match_duration. Data, not code.

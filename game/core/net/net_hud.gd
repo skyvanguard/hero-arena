@@ -15,6 +15,10 @@ var _hp_shown := -1.0
 var _feed_shown := ""
 var _state_shown := ""
 var my_team := 0
+var _ctl_bg: ColorRect
+var _ctl_fg: ColorRect
+var _ctl_label: Label
+var _ctl_shown := ""
 
 func _ready() -> void:
 	layer = 5
@@ -42,6 +46,23 @@ func _ready() -> void:
 	_hp_fg.size = Vector2(bw, 12.0)
 	_hp_fg.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_hp_fg)
+	# Control-mode objective bar (Phase 6 v1): under the score/timer column.
+	# Hidden (empty) until a control snapshot arrives; writes are on-change.
+	_ctl_bg = ColorRect.new()
+	_ctl_bg.color = Color(0.1, 0.12, 0.16, 0.85)
+	_ctl_bg.position = Vector2(vp.x * 0.5 - 70.0, 62.0)
+	_ctl_bg.size = Vector2(140.0, 6.0)
+	_ctl_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_ctl_bg)
+	_ctl_fg = ColorRect.new()
+	_ctl_fg.color = Color(0.8, 0.8, 0.9, 0.9)
+	_ctl_fg.position = Vector2(vp.x * 0.5 - 70.0, 62.0)
+	_ctl_fg.size = Vector2(140.0, 6.0)
+	_ctl_fg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_ctl_fg)
+	_ctl_label = _mk_label(vp.x * 0.5 - 70.0, 70.0, 140.0, 14.0, 11)
+	_ctl_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_ctl_label.modulate = Color(0.75, 0.8, 0.9)
 
 func _mk_label(x: float, y: float, w: float, h: float, fs: int) -> Label:
 	var l := Label.new()
@@ -84,3 +105,28 @@ func set_state(s: String) -> void:
 	if s != _state_shown:
 		_state_shown = s
 		_state_label.text = s
+
+## Control point state (Phase 6 v1, D16). owner: -1 neutral / 0 / 1; team:
+## the team progress runs toward (-1 none); progress 0..1. Bar = fill toward
+## the occupying team (full + owner color when held); label names the state.
+func set_control(owner: int, team: int, progress: float) -> void:
+	var q := roundf(clampf(progress, 0.0, 1.0) * 10.0) / 10.0
+	var col := Color(0.8, 0.8, 0.9, 0.9)
+	var who: int = owner if owner >= 0 else team
+	if who == 0:
+		col = Color(0.3, 0.55, 0.95, 0.95)
+	elif who == 1:
+		col = Color(0.95, 0.35, 0.3, 0.95)
+	var t := ""
+	if owner == 0:
+		t = "POINT: %s" % ("YOURS" if my_team == 0 else "ENEMY")
+	elif owner == 1:
+		t = "POINT: %s" % ("YOURS" if my_team == 1 else "ENEMY")
+	elif team >= 0:
+		t = "CAPTURE %d%%" % int(q * 100.0)
+	var key: Array = [owner, team, q, t]
+	if str(key) != _ctl_shown:
+		_ctl_shown = str(key)
+		_ctl_fg.size = Vector2(140.0 * q, 6.0)
+		_ctl_fg.color = col
+		_ctl_label.text = t

@@ -19,6 +19,21 @@ var target_score := 15
 var match_duration := 300.0
 var match_over := false
 var winner := -1  # 0 / 1 / -1 (draw or undecided)
+## Mode framework v1 (Phase 6, D16): the match's rules as a data resource.
+## null = built-in TDM legacy path (pre-framework matches/suites unchanged).
+## The host assigns it (ModeRegistry.get_mode(MatchConfig.mode_id)) before
+## the first step; Control additionally needs control_point set.
+var mode: Mode = null
+## Control objective state (mode == ControlMode): control_active = the
+## match runs a point (v1 fixed at control_point, the arena center); owner
+## (-1 neutral / 0 / 1), 0..1 progress for progress_team, and per-side
+## capture counts (the HUD score in control).
+var control_active := false
+var control_point: Vector3 = Vector3.ZERO
+var control_owner: int = -1
+var control_progress: float = 0.0
+var control_progress_team: int = -1
+var control_score: Dictionary = {0: 0, 1: 0}
 ## Lag compensation (Phase 5): max rewind (s) for hitscan validation. A
 ## shooter's measured input age (CharacterEntity.net_comp_delay, set by the
 ## MatchServer from the client's server-time estimate) is clamped to this;
@@ -46,6 +61,12 @@ func reset() -> void:
 	zones.clear()
 	_timers.clear()
 	_history.clear()
+	# Objective state (D14 in-place reset must clear it; the Mode instance
+	# persists - it is config, its per-match state lives here).
+	control_owner = -1
+	control_progress = 0.0
+	control_progress_team = -1
+	control_score = {0: 0, 1: 0}
 
 func setup_spawn(team: int, points: Array[Vector3]) -> void:
 	spawn_points[team] = points
@@ -127,6 +148,8 @@ func step(dt: float) -> void:
 		if not z.dead:
 			alive_z.append(z)
 	zones = alive_z
+	if mode != null:
+		mode.step(self, dt)
 	_check_match_over()
 
 ## Per-step pose tail for lag compensation (capped to the window).
@@ -218,6 +241,10 @@ static func _ray_sphere(origin: Vector3, dir: Vector3, c: Vector3, r: float) -> 
 func _check_match_over() -> void:
 	if match_over:
 		return
+	if mode != null:
+		mode.check_over(self)
+		return
+	# Legacy built-in TDM (mode == null; TDMMode mirrors these rules).
 	var s0: int = int(score.get(0, 0))
 	var s1: int = int(score.get(1, 0))
 	if s0 >= target_score or s1 >= target_score:
@@ -225,10 +252,18 @@ func _check_match_over() -> void:
 	elif time >= match_duration:
 		_finish_match(0 if s0 > s1 else (1 if s1 > s0 else -1))
 
+## Public finish (modes call this through the framework; the score in the
+## event is the MODE'S score when a mode is set, kills otherwise).
+func finish_match(w: int) -> void:
+	_finish_match(w)
+
 func _finish_match(w: int) -> void:
 	match_over = true
 	winner = w
-	emit_event("match_over", {"winner" = w, "score" = [int(score.get(0, 0)), int(score.get(1, 0))], "time" = time})
+	var sc: Array = [int(score.get(0, 0)), int(score.get(1, 0))]
+	if mode != null:
+		sc = mode.score_of(self)
+	emit_event("match_over", {"winner" = w, "score" = sc, "time" = time})
 
 func world_protected(target: CharacterEntity) -> bool:
 	return time < target.protected_until

@@ -36,6 +36,9 @@ var _views: Dictionary = {}   # ch_id(int) -> CharacterEntity
 var _ring: Array = []         # last 4 snapshots
 var _ring_times: Array = []   # parallel server-times
 var _rx_ms := 0
+var _mode_code := 0
+var _control_marker_mat: StandardMaterial3D = null
+var _control_owner_shown := -2
 var _match_duration := 300.0
 var _proj_views: Array = []   # pooled MeshInstance3D (cosmetic)
 var _last_score: Array = [0, 0]
@@ -190,6 +193,7 @@ func _on_peer_packet(_id: int, buf: PackedByteArray) -> void:
 		my_id = int(d.ch_id)
 		my_team = int(d.team)
 		_match_duration = float(d.match_duration)
+		_mode_code = int(d.get("mode_code", 0))
 		if world == null:
 			_enter()
 		else:
@@ -211,6 +215,10 @@ func _enter() -> void:
 	add_child(world)
 	var arena := Arena.build(world)
 	add_child(arena)
+	if _mode_code == 1:
+		world.control_active = true
+		world.control_point = Vector3.ZERO  # v1: fixed at arena center (wire §2)
+		_build_control_marker()
 	_make_proj_pool()
 	hud = NetHUD.new()
 	add_child(hud)
@@ -225,6 +233,23 @@ func _enter() -> void:
 		add_child(parena)
 		_p_in = NetInput.new()
 	print("CLIENT slot %d team %d (%s)" % [my_id, my_team, my_hero_id])
+
+## Control point floor marker (v1: one central circle at the arena origin).
+## Color updates only on OWNER change (GL canvas write-on-change rule).
+func _build_control_marker() -> void:
+	var mi := MeshInstance3D.new()
+	var cm := CylinderMesh.new()
+	cm.top_radius = 4.0  # ControlMode.capture_radius (wire keeps it fixed in v1)
+	cm.bottom_radius = 4.0
+	cm.height = 0.05
+	var mat := StandardMaterial3D.new()
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.albedo_color = Color(0.8, 0.8, 0.9, 0.18)
+	cm.material = mat
+	mi.mesh = cm
+	mi.position = Vector3(0.0, 0.04, 0.0)
+	world.add_child(mi)
+	_control_marker_mat = mat
 
 func _on_event(d: Dictionary) -> void:
 	if not _in_match:
@@ -257,6 +282,21 @@ func _on_snapshot(d: Dictionary) -> void:
 		hud.set_score(int(sc[0]), int(sc[1]))
 		var remaining := int(ceilf(maxf(0.0, _match_duration - float(d.time))))
 		hud.set_time(-1 if int(d.winner) != -1 else remaining)
+		var ctl: Array = d.get("control", [-1, -1, 0.0])
+		if is_instance_valid(world):
+			world.control_owner = int(ctl[0])
+			world.control_progress = float(ctl[2])
+		var own: int = int(ctl[0])
+		if _control_marker_mat != null and own != _control_owner_shown:
+			_control_owner_shown = own
+			var c := Color(0.8, 0.8, 0.9, 0.18)
+			if own == 0:
+				c = Color(0.25, 0.45, 0.9, 0.25)
+			elif own == 1:
+				c = Color(0.9, 0.3, 0.25, 0.25)
+			_control_marker_mat.albedo_color = c
+		if hud != null:
+			hud.set_control(int(ctl[0]), int(ctl[1]), float(ctl[2]))
 		_reconcile(d)
 
 ## Current server-time estimate (latest snapshot time + elapsed since RX).

@@ -7,7 +7,7 @@ extends Node
 ##   investigates sound, assault fights at normal ranges.
 ## (Behavior trees + objective-aware utilities land with mode objectives.)
 
-enum Intent { ATTACK, INVESTIGATE, REGROUP, RETREAT, HOLD }
+enum Intent { ATTACK, CAPTURE, INVESTIGATE, REGROUP, RETREAT, HOLD }
 
 var params: BotDifficulty = null
 var role: int = 0
@@ -61,14 +61,28 @@ func decide(world_: World, perception_: BotPerception, hero_: CharacterEntity) -
 		goal = _flank_goal(world_, hero_, t)
 		return
 
-	# 3) Investigate: a heard shot (controllers weigh this highest).
+	# 3) Objective (Phase 6, D16): in Control, an UNENGAGED bot takes the
+	# point when our team doesn't control it. ATTACK above keeps engaged bots
+	# fighting, so the squad splits naturally (fighters + capturers); when
+	# nobody is engaged everyone converges on the point, which is exactly
+	# what a neutral point demands. The goal is a deterministic per-bot
+	# spot inside the circle so the capturers don't stack.
+	if world_.mode != null and world_.mode.mode_id == "control" \
+			and world_.control_active \
+			and world_.control_owner != hero_.team:
+		intent = Intent.CAPTURE
+		target = null
+		goal = _capture_goal(world_, hero_)
+		return
+
+	# 4) Investigate: a heard shot (controllers weigh this highest).
 	if perception_.heard():
 		intent = Intent.INVESTIGATE
 		target = t if t != null and perception_.fresh(t) else null
 		goal = perception_.heard_pos
 		return
 
-	# 4) Regroup: an ally is badly hurt (support weighs this higher), or I've
+	# 5) Regroup: an ally is badly hurt (support weighs this higher), or I've
 	# drifted out of formation while the squad is in a fight (stick/protect).
 	var threshold := params.grouping_threshold * (1.1 if role == HeroData.Role.SUPPORT else 1.0)
 	var ally := _wounded_ally(world_, hero_, threshold)
@@ -80,10 +94,27 @@ func decide(world_: World, perception_: BotPerception, hero_: CharacterEntity) -
 		goal = ally.global_position
 		return
 
-	# 5) Hold: stay put (execution does the scan turn).
+	# 6) Hold: stay put (execution does the scan turn).
 	intent = Intent.HOLD
 	target = null
 	goal = hero_.global_position
+
+## CAPTURE goal: a deterministic per-bot spot INSIDE the capture circle
+## (offset/spread/phase from the ControlMode resource) so the point gets
+## taken quickly without the three capturers clumping on one capsule.
+func _capture_goal(world_: World, hero_: CharacterEntity) -> Vector3:
+	var cm: ControlMode = world_.mode
+	var idx := 0
+	for chx in world_.characters:
+		var ch: CharacterEntity = chx
+		if ch == hero_ or not ch.alive:
+			continue
+		if ch.team == hero_.team and ch.get_instance_id() < hero_.get_instance_id():
+			idx += 1
+	var a := deg_to_rad(float(idx) * cm.capture_goal_spread_deg
+			+ float(hero_.team) * cm.capture_goal_team_phase_deg)
+	return world_.control_point + Vector3(cos(a) * cm.capture_goal_offset, 0.0,
+			sin(a) * cm.capture_goal_offset)
 
 func _fight_range_for_role() -> float:
 	match role:

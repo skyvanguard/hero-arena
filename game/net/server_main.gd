@@ -18,6 +18,8 @@ var _lob_args: Array = []  # [lobby_addr, lregion, lname, lip]
 var _accum := 0.0
 var _lob_last_humans := -1
 var _lob_last_over := false
+var _ctllog := false  # --ctllog: print control-point state every 10 s (ops/debug)
+var _ctllog_n := 0
 
 func _ready() -> void:
 	randomize()
@@ -29,6 +31,10 @@ func _ready() -> void:
 			port = int(a.substr(7))
 		elif a.begins_with("--dport="):
 			dport = int(a.substr(8))
+		elif a.begins_with("--mode="):
+			MatchConfig.mode_id = a.substr(7)  # tdm | control (ModeRegistry)
+		elif a == "--ctllog":
+			_ctllog = true
 		elif a.begins_with("--relay="):
 			relay_addr = a.substr(8)
 	var size := clampi(MatchConfig.team_size, 1, 6)
@@ -39,6 +45,13 @@ func _ready() -> void:
 	add_child(world)
 	var arena := Arena.build(world)
 	add_child(arena)
+	# Mode framework v1 (Phase 6, D16): rules as a data resource. Control
+	# pins its point at the arena center (v1; rotating points = follow-up).
+	world.mode = ModeRegistry.get_mode(MatchConfig.mode_id)
+	if world.mode != null and world.mode.mode_id == "control":
+		world.control_active = true
+		world.control_point = Vector3.ZERO
+		print("SERVER mode: control (point at arena center)")
 	net = MatchServer.new()
 	add_child(net)
 	net.setup(world, port, size)
@@ -150,6 +163,27 @@ func _do_lobby_register() -> void:
 	print("SERVER lobby registration at %s (advertising %s:%d, region %s)" % [
 			lobby_addr, lip_f, port_f, lregion_f])
 
+## --ctllog: periodic control-point state line (ops/debug; 600 frames = 10 s).
+func _ctllog_tick() -> void:
+	if not _ctllog:
+		return
+	_ctllog_n += 1
+	if _ctllog_n < 600:
+		return
+	_ctllog_n = 0
+	var inside := ""
+	for c in world.characters:
+		if not c.alive:
+			continue
+		var d: Vector3 = c.global_position - world.control_point
+		if d.x * d.x + d.z * d.z <= 16.0 and absf(d.y) <= 2.0:
+			inside += str(int(c.team))
+	print("SERVER ctl t=%.1f owner=%d prog=%.2f pteam=%d cscore=%s kills=%s inside=[%s]" % [
+		world.time, world.control_owner, world.control_progress,
+		world.control_progress_team, str(world.control_score), str(world.score), inside])
+	print("SERVER ctl mode=%s active=%s over=%s target=%d dur=%.0f" % [
+		str(world.mode), world.control_active, world.match_over, world.target_score, world.match_duration])
+
 ## A fresh match started in place (MatchServer.reset_match, triggered by a
 ## join into an over match with no humans left): re-fill the bots with a
 ## fresh shuffled roster, same composition as startup.
@@ -171,6 +205,7 @@ func _fill_teams(size: int) -> void:
 			net.spawn_bot(team, data, pts[i])
 
 func _physics_process(delta: float) -> void:
+	_ctllog_tick()
 	_accum += delta
 	var steps := 0
 	while _accum >= FIXED_DT and steps < 4:
