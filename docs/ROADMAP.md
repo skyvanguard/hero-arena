@@ -98,6 +98,8 @@
 
 ## 6. Phase 6 — First Complete Match (FIRST MAJOR MILESTONE)
 
+**Status: IN PROGRESS (round 30).** **Mode framework v1 + Control mode shipped (this round, D16):** match rules are data resources (`Mode`/`TDMMode`/`ControlMode` + `ModeRegistry`, chosen by `MatchConfig.mode_id`) — the server's step/over/score path is now mode-generic, and the legacy `mode == null` TDM path is untouched (every pre-framework suite unmodified). Control v1: one central point (arena center), solo 15 s capture, contested freezes, a captured point is held until re-captured, 2 captures to win, timeout → captures → holder → draw; bots gained the CAPTURE intent (objective beats curiosity, deterministic per-bot spots); the wire carries 3 control snapshot bytes + a mode_code in M_SLOT; NetHUD gained the capture bar + the floor marker. Sim suite 15/15 green, two consecutive runs. Remaining in Phase 6: Capture + Escort (next two Mode resources from this same framework), the mode picker + map voting (hero-select writes mode_id + map), results screen + progression (countdown, stats/MVP/rewards, account level/mastery/cosmetics), mobile controls customization, real-device perf sign-off, public demo build + issue tracker.
+
 **Deliver (directive §6, verbatim):**
 - [ ] 3v3 competitive + casual (TDM + Control + Capture + Escort available)
 - [ ] 2 original maps (compact, lanes, cover, verticality, flanks, objectives, spawns) + map voting in lobby

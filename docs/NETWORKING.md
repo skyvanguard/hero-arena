@@ -78,9 +78,9 @@ Dispatch is by first magic byte, channel-independent:
 | Magic | Name | Dir | Channel | Payload |
 |---|---|---|---|---|
 | `0x48` | M_HELLO | C→S | reliable | team_size u8, hero_id str, **session u32** (0 = fresh join, else slot token) |
-| `0x53` | M_SLOT | S→C | reliable | result i8 (0 ok, -1 team full, **-2 match over**), ch_id u8, team u8, team_size u8, time f32, target_score u8, match_duration f32, **token u32** |
+| `0x53` | M_SLOT | S→C | reliable | result i8 (0 ok, -1 team full, **-2 match over**), ch_id u8, team u8, team_size u8, time f32, target_score u8, match_duration f32, **token u32**, **mode_code u8** (0 TDM, 1 Control — the client builds its HUD/mirror for the mode) |
 | `0x49` | M_INPUT | C→S | unreliable | seq u16, move (f32,f32), yaw f32, pitch f32, fire u8, edges u8, **time_est f32** (client's estimate of the server time this frame was sampled at) |
-| `0x50` | M_SNAPSHOT | S→C | unreliable | seq u16, time f32, score0/1 u16, winner i8, chars[], projs[] |
+| `0x50` | M_SNAPSHOT | S→C | unreliable | seq u16, time f32, score0/1 u8, winner u8, **control (owner u8, progress-team u8, progress u8 — D16)**, chars[], projs[] |
 | `0x45` | M_EVENT | S→C | reliable | type u8 + payload |
 | `0x44` | M_DISCOVER_PING | C→S | UDP discovery port | client name str |
 | `0x46` | M_DISCOVER_REPLY | S→C | UDP discovery port | state u8 (0 open, 1 full, 2 over), team_size u8, humans u8, target_score u8, game_port u16, name str, time f32 |
@@ -88,7 +88,12 @@ Dispatch is by first magic byte, channel-independent:
 - **Snapshot**: all characters (id u8, team u8, alive u8, hero_idx u8,
   pos (f32×3), rot_y f32, hp/max_hp f32) up to `MAX_CHARS = 6` per side
   (constant: up to `team_size` per side, 6 v1) + up to `MAX_PROJS = 8`
-  projectiles (owner u8, pos f32×3, dir f32×3).
+  projectiles (owner u8, pos f32×3, dir f32×3). score0/1 carry the MODE'S
+  score (kills in TDM, captures in Control).
+- **Control bytes (D16, Phase 6 v1)**: owner u8 (0 none, 1 team0, 2 team1),
+  the team progress runs toward (0/1, 2 none), progress 0..255. The point
+  POSITION is not sent — v1 fixes it at the arena center, which the client's
+  mirror arena already knows (rotating/multi-point = v2).
 - **Events** (reliable, for UI/feel): E_HIT=0, E_KILL=1 (names + teams +
   headshot), E_RESPAWN=2, E_MATCH_OVER=3, E_HEAL=4.
 - **Aim convention**: client sends **absolute** camera yaw/pitch; server
@@ -254,6 +259,16 @@ Dispatch is by first magic byte, channel-independent:
   disabled freezes its stream while B keeps flowing), and a dropped client
   with reconnect enabled re-joins its own match through the relay (token
   reattach over the forwarded stream).
+- `tests/test_mode_control.tscn` — **mode framework + Control (round 30,
+  15 checks)**: registry returns TDM/Control (unknown → TDM); TDM-as-mode wins
+  at target_score through the framework; the full control state machine —
+  solo occupant starts progress, contested freezes it, capture scores + owns
+  the point, holding needs no occupancy, enemy re-occupation runs progress
+  toward the enemy, a re-capture to 1-1 does NOT end the match, the 2nd team
+  capture wins; tied timeout → holder, 0-0 timeout → draw; `World.reset()`
+  clears all objective state (D14 compatibility); a bot with no target in a
+  neutral control decides CAPTURE with a goal inside the circle; and 6 bots
+  in a live control match start capturing within 30 s (stochastic by design).
 - `tests/test_discovery.tscn` — UDP ping/reply over loopback (6 checks):
   open server answers with game port + state + humans, join reflected in the
   headcount, full and over states advertised (over wins over full), dead port
@@ -280,9 +295,9 @@ Dispatch is by first magic byte, channel-independent:
   matched the client count exactly, so the pacing is server-confirmed). This
   is the strongest broadcast-leg evidence available without two physical
   phones; the real-WiFi two-phone sign-off remains the acceptance test.
-- Full battery: 14 headless suites, 262 checks (10 pre-lobby suites at 205 +
+- Full battery: 15 headless suites, 277 checks (10 pre-lobby suites at 205 +
   test_lobby 12 (round 13) + test_net_profiles 30 + test_match_lifecycle 8
-  (round 28) + test_relay 7 (round 29)).
+  (round 28) + test_relay 7 (round 29) + test_mode_control 15 (round 30)).
 
 ## 8. v1.1 tradeoffs (explicit)
 
