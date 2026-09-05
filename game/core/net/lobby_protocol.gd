@@ -9,8 +9,16 @@ extends RefCounted
 ##   client -> lobby: ping, join {region, party, skill, name}
 ##   lobby -> client: hello {region, matches, waiters}, pong,
 ##                    queue {stage, waited, open}, assign {host, port, ...}
-##   match -> lobby:  reg {ip, port, region, team_size, name}, state {humans, over}, hb
-##   lobby -> match:  regack {match_id}
+##   match -> lobby:  reg {ip, port, region, team_size, name, mode}, state {humans, over}, hb
+##   lobby -> match:  regack {match_id}, setmode {match_id, mode} (D20 vote result)
+##   client -> lobby: vote {match_id, mode} (D20: vote the NEXT match mode;
+##                    one vote per peer per match, last write wins)
+##   lobby -> client: voteresult {match_id, tally, leading, decided, mode}
+##
+## D20 voting (protocol v1.3): the lobby tallies votes per match; a STRICT
+## MAJORITY with >= 2 votes decides. On decision the lobby updates the
+## directory entry and forwards setmode to the match server; the server
+## applies the voted mode at the next in-place match reset (reset_match).
 
 const T_PING := "ping"
 const T_PONG := "pong"
@@ -22,6 +30,9 @@ const T_REG := "reg"
 const T_REGACK := "regack"
 const T_STATE := "state"
 const T_HB := "hb"
+const T_VOTE := "vote"
+const T_VOTERESULT := "voteresult"
+const T_SETMODE := "setmode"
 
 const QUEUE_STAGE_STRICT := 1
 const QUEUE_STAGE_SKILL := 2

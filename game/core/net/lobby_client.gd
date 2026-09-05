@@ -23,6 +23,8 @@ signal pong(rtt_ms: float)
 signal queue(info: Dictionary)
 signal assign(info: Dictionary)
 signal regack(info: Dictionary)
+signal vote_result(info: Dictionary)
+signal setmode(info: Dictionary)  # match servers: a vote decided the mode
 
 var host := ""
 var port := 0
@@ -88,8 +90,14 @@ func join_queue(region: String, party: int, skill: int, name: String) -> void:
 			started_at = now, params = [region, party, skill, name]}
 	_put(m)
 
-func send_state(humans: int, over: bool) -> void:
-	_put({t = LobbyProtocol.T_STATE, humans = humans, over = over})
+func send_state(humans: int, over: bool, mode := "") -> void:
+	_put({t = LobbyProtocol.T_STATE, humans = humans, over = over, mode = mode})
+
+## D20: vote a match's next mode (one vote per client, last write wins).
+## Fire-and-forget: a lost vote simply isn't counted - the player can
+## re-tap; the lobby dedupes by peer, never by seq.
+func vote(match_id: int, mode: String) -> void:
+	_put({t = LobbyProtocol.T_VOTE, match_id = match_id, mode = mode})
 
 func ping() -> void:
 	_seq_ping += 1
@@ -180,5 +188,9 @@ func _dispatch(msg: Dictionary) -> void:
 	elif t == LobbyProtocol.T_REGACK:
 		_pending_reg = {}
 		regack.emit(msg)
+	elif t == LobbyProtocol.T_VOTERESULT:
+		vote_result.emit(msg)
+	elif t == LobbyProtocol.T_SETMODE:
+		setmode.emit(msg)
 	elif t == "err":
 		print("LOBBY-CLIENT error: %s" % str(msg.get("reason", "?")))

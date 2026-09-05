@@ -8,6 +8,10 @@ const FIXED_DT := 1.0 / 60.0
 var world: World
 var player: Hero
 var _bot_name_idx := [0, 0]
+## D20: next-match mode vote (results screen, net + lobby matches only).
+var _vote_lob: LobbyClient = null
+var _vote_status: Label = null
+var _net_match_id := 0
 var bots: Array = []
 var practice: PracticeManager = null
 var _net_client: MatchClient = null
@@ -39,9 +43,11 @@ func _ready() -> void:
 	_hero_select.range_deployed.connect(_on_range)
 	_hero_select.net_deployed.connect(_on_net_deploy)
 
-func _on_net_deploy(host_port: String, hero_data: HeroData) -> void:
+func _on_net_deploy(host_port: String, hero_data: HeroData, match_id: int) -> void:
 	# LAN match (Phase 5 v1): the MatchClient owns the render side; main only
-	# tracks teardown + the results overlay.
+	# tracks teardown + the results overlay. match_id (D20) identifies the
+	# lobby entry for the next-match mode vote.
+	_net_match_id = match_id
 	if _hero_select != null:
 		_hero_select.queue_free()
 		_hero_select = null
@@ -73,6 +79,11 @@ func _on_net_ended(winner: int, score: Array, wtime: float, lost: bool,
 	var mp: int = _net_client._map_code if _net_client != null else 0
 	info["label"] = (ids_m[mc] if mc < ids_m.size() else "tdm").to_upper() \
 			+ "  ·  " + (ids_map[mp] if mp < ids_map.size() else "crossdocks").to_upper()
+	# D20: next-match mode vote (lobby-assigned matches only; offline has
+	# no lobby to vote against).
+	if _net_match_id > 0 and DisplayServer.get_name() != "headless":
+		info["vote_match_id"] = _net_match_id
+		_start_vote_lobby()
 	_show_results(winner, score, wtime, title, info)
 
 func _on_deploy(hero_data: HeroData) -> void:
@@ -334,6 +345,44 @@ func _show_results(winner: int, score: Array, wtime: float, title_override := ""
 		xl.modulate = Color(0.75, 1.0, 0.75)
 		_results.add_child(xl)
 		y += 34.0
+	# Next-match mode vote (D20, net + lobby only): four mode buttons; the
+	# lobby tallies (one vote per peer, last write wins) and a strict
+	# majority decides - the match server applies it at the next reset.
+	var vote_mid: int = int(info.get("vote_match_id", 0))
+	if vote_mid > 0:
+		var vl := Label.new()
+		vl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		vl.text = "NEXT MATCH  -  VOTE THE MODE"
+		vl.position = Vector2(vp.x * 0.5 - 200, y + 2)
+		vl.size = Vector2(400, 20)
+		vl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		vl.add_theme_font_size_override("font_size", 14)
+		vl.modulate = Color(0.55, 0.6, 0.75)
+		_results.add_child(vl)
+		var vb_w := 74.0
+		var vb_gap := 8.0
+		var vb_total := 4.0 * vb_w + 3.0 * vb_gap
+		var vb_x := vp.x * 0.5 - vb_total * 0.5
+		var vote_ids: Array = ModeRegistry.ids()
+		for i in 4:
+			var vb := Button.new()
+			vb.text = str(vote_ids[i]).to_upper().left(3)
+			vb.position = Vector2(vb_x + float(i) * (vb_w + vb_gap), y + 26)
+			vb.size = Vector2(vb_w, 30)
+			vb.add_theme_font_size_override("font_size", 13)
+			var opt := str(vote_ids[i])
+			vb.pressed.connect(func() -> void: _cast_vote(opt))
+			_results.add_child(vb)
+		_vote_status = Label.new()
+		_vote_status.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_vote_status.text = "tap a mode - applies to the NEXT match"
+		_vote_status.position = Vector2(vp.x * 0.5 - 200, y + 62)
+		_vote_status.size = Vector2(400, 20)
+		_vote_status.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		_vote_status.add_theme_font_size_override("font_size", 14)
+		_vote_status.modulate = Color(0.7, 0.78, 0.9)
+		_results.add_child(_vote_status)
+		y += 92.0
 	var hint := Label.new()
 	hint.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var mins := int(wtime) / 60
@@ -345,6 +394,39 @@ func _show_results(winner: int, score: Array, wtime: float, title_override := ""
 	hint.add_theme_font_size_override("font_size", 20)
 	hint.modulate = Color(0.8, 0.85, 1.0)
 	_results.add_child(hint)
+
+## D20: the vote lobby (results screen only). Same host heuristic as
+## hero-select's lobby (10.0.2.2 on Android = the host under NAT).
+func _start_vote_lobby() -> void:
+	if _vote_lob != null:
+		return
+	_vote_lob = LobbyClient.new()
+	add_child(_vote_lob)
+	var host := "10.0.2.2" if OS.has_feature("android") else "127.0.0.1"
+	_vote_lob.setup(host, MatchConfig.lobby_port)
+	_vote_lob.vote_result.connect(_on_vote_result)
+
+func _cast_vote(mode: String) -> void:
+	if _vote_lob != null and _net_match_id > 0:
+		_vote_lob.vote(_net_match_id, mode)
+
+func _on_vote_result(info: Dictionary) -> void:
+	if _vote_status == null:
+		return
+	if bool(info.get("decided", false)):
+		_vote_status.text = "DECIDED: " + str(info.get("mode", "?")).to_upper() + "  (next match)"
+		_vote_status.modulate = Color(1.0, 0.85, 0.4)
+		return
+	var tally: Dictionary = info.get("tally", {})
+	var parts: Array = []
+	for k in ModeRegistry.ids():
+		if tally.has(k):
+			parts.append(str(k).to_upper() + " " + str(int(tally[k])))
+	var txt: String = "  ·  ".join(parts) if parts.size() > 0 else "no votes yet"
+	var ld := str(info.get("leading", ""))
+	if ld != "":
+		txt += "   leading " + ld.to_upper()
+	_vote_status.text = txt
 
 func _unhandled_input(event: InputEvent) -> void:
 	if _results == null:
@@ -362,6 +444,11 @@ func _exit_to_select() -> void:
 		_results = null
 	if _net_client != null and is_instance_valid(_net_client):
 		_net_client.exit()
+	if _vote_lob != null and is_instance_valid(_vote_lob):
+		_vote_lob.queue_free()
+	_vote_lob = null
+	_vote_status = null
+	_net_match_id = 0
 	for n in _match_nodes:
 		if is_instance_valid(n):
 			n.queue_free()

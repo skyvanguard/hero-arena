@@ -46,7 +46,8 @@ var reap_after := 5.0
 var next_id := 1
 ## peers: "ip:port" -> {buf: String, kind: "match"|"client", last_seen, last_seqs: {type: int}}
 var _peers: Dictionary = {}
-## matches: id -> {key, ip, port, region, team_size, humans, over, name, last_seen}
+## matches: id -> {key, ip, port, region, team_size, humans, over, name,
+##   last_seen, mode, votes {mode: count}, vote_source {peer: mode}, decided}
 var matches: Dictionary = {}
 ## waiters: peer key -> {region, party, skill, name, joined_at, last_queue_sent}
 var waiters: Dictionary = {}
@@ -176,6 +177,9 @@ func _dispatch(key: String, msg: Dictionary) -> void:
 				name = str(msg.get("name", "match")),
 				mode = str(msg.get("mode", "tdm")),
 				last_seen = time,
+				votes = {},
+				vote_source = {},
+				decided = false,
 			}
 			_send(key, {t = LobbyProtocol.T_REGACK, match_id = id})
 			match_registered.emit(matches[id].duplicate())
@@ -187,12 +191,78 @@ func _dispatch(key: String, msg: Dictionary) -> void:
 				var m: Dictionary = matches[mid]
 				m.humans = clampi(int(msg.get("humans", m.humans)), 0, int(m.team_size))
 				m.over = bool(msg.get("over", m.over))
+				# D20: the server reports the mode it is actually running, so
+				# the directory reflects the voted-mode swap at the next
+				# in-place reset (the 2 s state heartbeat keeps this fresh).
+				var new_mode := str(msg.get("mode", ""))
+				if new_mode != "" and ModeRegistry.ids().has(new_mode):
+					m.mode = new_mode
+		LobbyProtocol.T_VOTE:
+			_on_vote(key, msg)
 		_:
 			pass
 	# Any message from a match server (ping included) keeps the match alive.
 	var mid2 := _match_id_of(key)
 	if mid2 != 0:
 		matches[mid2].last_seen = time
+
+## D20 vote: one vote per peer per match, last write wins (a re-tap or a
+## retransmit never inflates the tally). Strict majority with >= 2 votes
+## decides; the decision updates the directory entry and is forwarded to
+## the match server, which applies it at the next in-place reset.
+func _on_vote(key: String, msg: Dictionary) -> void:
+	var mid := int(msg.get("match_id", 0))
+	var m: Dictionary = matches.get(mid, {})
+	# Over matches are votable: the vote targets the NEXT match, and the
+	# server runs it in-place on the next hello (the entry stays the same).
+	if m.is_empty():
+		_send(key, {t = "err", reason = "no such match " + str(mid)})
+		return
+	var opt := str(msg.get("mode", ""))
+	if not ModeRegistry.ids().has(opt):
+		_send(key, {t = "err", reason = "bad mode " + opt})
+		return
+	# Last write wins: retract the previous vote (if any) before counting
+	# the new one - a same-mode re-vote is idempotent (net zero).
+	var prev := str(m.vote_source.get(key, ""))
+	if prev != "":
+		m.votes[prev] = int(m.votes[prev]) - 1
+	m.vote_source[key] = opt
+	m.votes[opt] = int(m.votes.get(opt, 0)) + 1
+	# Decide BEFORE acking: the voter who casts the deciding vote sees
+	# decided=true in the very response that caused it.
+	_try_decide(int(mid), m)
+	_send(key, {
+		t = LobbyProtocol.T_VOTERESULT, match_id = mid,
+		tally = m.votes.duplicate(true), leading = _leading(m),
+		decided = bool(m.decided), mode = str(m.mode),
+	})
+
+func _leading(m: Dictionary) -> String:
+	var best := ""
+	var best_n := 0
+	for k in m.votes:
+		if int(m.votes[k]) > best_n:
+			best_n = int(m.votes[k])
+			best = str(k)
+	return best
+
+func _try_decide(mid: int, m: Dictionary) -> void:
+	if bool(m.decided):
+		return
+	var total := 0
+	for v in m.votes.values():
+		total += int(v)
+	if total < 2:
+		return
+	var winner := _leading(m)
+	if winner == "" or int(m.votes[winner]) * 2 <= total:
+		return  # no strict majority
+	m.decided = true
+	m.mode = winner
+	_send(str(m.key), {t = LobbyProtocol.T_SETMODE, match_id = mid, mode = winner})
+	print("LOBBY match %d mode voted: %s (%d/%d votes)" % [
+			mid, winner, int(m.votes[winner]), total])
 
 func _match_id_of(key: String) -> int:
 	for id in matches.keys():
@@ -291,6 +361,8 @@ func _run_queue() -> void:
 				t = LobbyProtocol.T_ASSIGN,
 				host = str(m.ip), port = int(m.port), match_id = int(pick.id),
 				region = str(m.region), name = str(m.name), mode = str(m.mode),
+				tally = m.votes.duplicate(true), leading = _leading(m),
+				decided = bool(m.decided),
 				stage = stage, waited = time - float(w.joined_at),
 			})
 			client_assigned.emit({host = str(m.ip), port = int(m.port),

@@ -39,6 +39,10 @@ var _started := false
 ## The map id this server runs (D18) — packed into M_SLOT as map_code so
 ## the client's mirror arena matches the server's geometry.
 var map_id := "crossdocks"
+## D20: the mode a lobby vote decided for the NEXT match ("" = keep the
+## configured mode). Applied in reset_match() - the in-place new-match
+## point, so no live match ever changes rules under its players.
+var _pending_mode := ""
 
 func setup(w: World, p: int, ts: int) -> void:
 	world = w
@@ -270,9 +274,32 @@ func reset_match() -> void:
 	team_humans = [0, 0]
 	next_id = 0
 	world.reset()
+	if _pending_mode != "":
+		# D20: apply the voted mode to the fresh match. Mode setup is pure
+		# world data (no nodes), so a swap here is always safe.
+		var vm: Mode = ModeRegistry.get_mode(_pending_mode)
+		world.mode = vm
+		vm.setup(world)
+		print("SERVER next match mode from lobby vote: " + _pending_mode)
+		_pending_mode = ""
 	_snap_acc = 0.0
 	print("SERVER match reset (fresh match in place, next_id=0)")
 	match_reset.emit()
+
+## D20: the lobby forwarded a decided mode vote (setmode). The server is
+## authoritative about itself: validate the id and defer application to
+## the next reset (a live match never changes rules mid-fight).
+func set_mode_from_lobby(mode_id: String) -> void:
+	if not ModeRegistry.ids().has(mode_id):
+		print("SERVER setmode ignored (unknown mode " + mode_id + ")")
+		return
+	if mode_id == _pending_mode:
+		return
+	var current := "tdm"
+	if world != null and world.mode != null:
+		current = str(world.mode.mode_id)
+	_pending_mode = mode_id
+	print("SERVER voted mode accepted: " + mode_id + " (next match; current " + current + ")")
 
 func _is_frozen(ch: CharacterEntity) -> bool:
 	for f in _frozen.values():

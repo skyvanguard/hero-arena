@@ -5,7 +5,7 @@ extends CanvasLayer
 
 signal hero_deployed(hero: HeroData)
 signal range_deployed(hero: HeroData)
-signal net_deployed(host_port: String, hero: HeroData)
+signal net_deployed(host_port: String, hero: HeroData, match_id: int)
 
 var _deploy_btn: Control
 var _practice_btn: Control
@@ -547,7 +547,9 @@ func _on_lob_assign(info: Dictionary) -> void:
 	_lob_status.text = "joining " + host_port + "  [" + mode_s + "]"
 	_lob_play_btn.text = "PLAY"
 	if _hero != null:
-		net_deployed.emit(host_port, _hero)
+		# match_id (D20): the lobby's id of this match - the results screen
+		# votes the NEXT match's mode against it.
+		net_deployed.emit(host_port, _hero, int(info.get("match_id", 0)))
 
 func _on_play_online() -> void:
 	if _lob_in_queue:

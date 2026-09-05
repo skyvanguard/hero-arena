@@ -18,6 +18,7 @@ var _lob_args: Array = []  # [lobby_addr, lregion, lname, lip]
 var _accum := 0.0
 var _lob_last_humans := -1
 var _lob_last_over := false
+var _lob_state_acc := 0.0
 var _ctllog := false  # --ctllog: print control-point state every 10 s (ops/debug)
 var _ctllog_n := 0
 
@@ -149,6 +150,11 @@ func _do_lobby_register() -> void:
 	lob = LobbyClient.new()
 	add_child(lob)
 	lob.setup(String(parts[0]), int(parts[1]))
+	# D20: a decided vote arrives as setmode; the server stores it for the
+	# next in-place match reset (a live match never changes rules mid-fight).
+	lob.setmode.connect(func(i: Dictionary) -> void:
+		net.set_mode_from_lobby(str(i.get("mode", "")))
+	)
 	var lip_f := lip
 	var port_f := port
 	if _relay != null and _relay_vport > 0:
@@ -243,7 +249,14 @@ func _physics_process(delta: float) -> void:
 	net.tick(delta)
 	if lob != null:
 		var humans := int(net.team_humans[0]) + int(net.team_humans[1])
-		if humans != _lob_last_humans or world.match_over != _lob_last_over:
+		_lob_state_acc += delta
+		# D20: heartbeat (2 s) so the lobby entry survives the long silent
+		# stretches of a bot-only match (reap = 5 s), and the directory's
+		# mode field tracks the voted-mode swap at the next reset.
+		if humans != _lob_last_humans or world.match_over != _lob_last_over \
+				or _lob_state_acc >= 2.0:
+			_lob_state_acc = 0.0
 			_lob_last_humans = humans
 			_lob_last_over = world.match_over
-			lob.send_state(humans, world.match_over)
+			var lob_mode := str(world.mode.mode_id) if world.mode != null else "tdm"
+			lob.send_state(humans, world.match_over, lob_mode)
