@@ -25,6 +25,7 @@ var _perk_panel: Control
 var _perk_title: Label
 var _perk_names: Array[Label] = []
 var _perk_descs: Array[Label] = []
+var _perk_cards: Array = []
 var _perk_badge: Label
 var _perk_shown := false
 
@@ -74,6 +75,7 @@ func _ready() -> void:
 	# D25: perk panel (fixed nodes; shown on level-up, picked perk -> badge).
 	_perk_panel = Control.new()
 	_perk_panel.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_perk_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE  # only the cards block input
 	_perk_panel.visible = false
 	add_child(_perk_panel)
 	var cw := 250.0
@@ -113,6 +115,7 @@ func _ready() -> void:
 			elif ev is InputEventMouseButton and ev.pressed \
 					and ev.button_index == MOUSE_BUTTON_LEFT:
 					perk_chosen.emit(ci))
+		_perk_cards.append(card)
 		_perk_panel.add_child(card)
 	_perk_badge = _mk_label(12.0, vp.y - 52.0, 200.0, 16.0, 13)
 	_perk_badge.modulate = Color(1.0, 0.9, 0.5)

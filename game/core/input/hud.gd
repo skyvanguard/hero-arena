@@ -43,6 +43,7 @@ var _perk_panel: Control
 var _perk_title: Label
 var _perk_names: Array[Label] = []
 var _perk_descs: Array[Label] = []
+var _perk_cards: Array = []
 var _perk_badge: Label
 var _perk_shown := false
 
@@ -133,6 +134,7 @@ func _build() -> void:
 	# Controls contract like every other action.
 	_perk_panel = Control.new()
 	_perk_panel.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_perk_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE  # only the cards block input
 	_perk_panel.visible = false
 	root.add_child(_perk_panel)
 	var cw := 250.0
@@ -185,6 +187,7 @@ func _build() -> void:
 			elif ev is InputEventMouseButton and ev.pressed \
 					and ev.button_index == MOUSE_BUTTON_LEFT:
 					perk_chosen.emit(ci))
+		_perk_cards.append(card)
 		_perk_panel.add_child(card)
 	_perk_badge = Label.new()
 	_perk_badge.position = Vector2(24, vp.y - 112)
