@@ -322,6 +322,14 @@ Dispatch is by first magic byte, channel-independent:
   heartbeat updates the directory mode; over matches accept votes (the
   results-screen flow). Verified on-device (emulator): results-screen vote
   row, CAP tap, lobby ack rendered as "CAPTURE 1 · leading CAPTURE".
+- `tests/test_mapvote.tscn` — **next-match map voting (round 35, 12
+  checks)**: registration carries the host map; bad-map votes ignored;
+  one map vote per peer (last write wins); MODE and MAP tallies are
+  independent per peer; split map votes hold; a strict majority flips the
+  directory map, leaves the mode domain untouched, and forwards setmap;
+  the next reset applies the voted map (arena rebuilt, spawn points
+  change, pending slot cleared); assign carries map + map vote state; the
+  state heartbeat keeps the directory map fresh.
 - `tests/test_mode_escort.tscn` — **Escort mode (round 31, 11 checks)**:
   registry; setup pins the lane from the spawn x's; idle payload; one
   attacker pushes at max_speed with real progress; equal heads fully stop
@@ -355,12 +363,12 @@ Dispatch is by first magic byte, channel-independent:
   matched the client count exactly, so the pacing is server-confirmed). This
   is the strongest broadcast-leg evidence available without two physical
   phones; the real-WiFi two-phone sign-off remains the acceptance test.
-- Full battery: 20 headless suites, 345 checks (10 pre-lobby suites at 205 +
+- Full battery: 21 headless suites, 357 checks (10 pre-lobby suites at 205 +
   test_lobby 12 (round 13) + test_net_profiles 30 + test_match_lifecycle 8
   (round 28) + test_relay 7 (round 29) + test_mode_control 15 (round 30) +
   test_mode_capture 17 + test_mode_escort 11 (rounds 31-32) + test_map 12
-  (round 32) + test_results 17 (round 33) + test_vote 11 (round 34)). Note:
-  under heavy machine load several net suites flake
+  (round 32) + test_results 17 (round 33) + test_vote 13 (round 34)
+  + test_mapvote 12 (round 35)). Note: under heavy machine load several net suites flake
   (frame-based waits vs real-time SimLink latency): test_net_profiles
   (proven pre-existing at the pristine round-30 baseline), test_net_sim
   and test_roster (observed once each under a loaded battery; green on
@@ -411,7 +419,7 @@ reliability**:
   RECEIVED time, not the last pong: a stale pong would re-fire the connect
   branch forever (round-13 bug, fixed).
 
-### 9.2 Message types (lobby protocol v1.3, D20 voting added)
+### 9.2 Message types (lobby protocol v1.4, D20/D21 voting)
 
 | Type | Dir | Seq | Notes |
 |---|---|---|---|
@@ -419,15 +427,18 @@ reliability**:
 | hello{region,matches,waiters} | s->c | - | Sent on first ping |
 | join{region,party,skill,name} | c->s | yes | Creates the waiter |
 | queue{stage,waited,open} | s->c | - | >=1 Hz while queued; doubles as keep-alive |
-| assign{host,port,match_id,region,name,mode,tally,leading,decided,stage,waited} | s->c | - | mode = the match's mode id (D18: the queued client knows what it is joining); tally/leading/decided = the D20 vote state |
-| reg{ip,port,region,team_size,name,mode} | s->s | yes | A game server registers its match (published address + mode, D18) |
+| assign{host,port,match_id,region,name,mode,map,tally,leading,decided,map_tally,map_leading,map_decided,stage,waited} | s->c | - | mode/map = the match's mode + map ids (D18: the queued client knows what it is joining); tally/leading/decided + map_* = the D20/D21 vote state (mode and map are independent tallies) |
+| reg{ip,port,region,team_size,name,mode,map} | s->s | yes | A game server registers its match (published address + mode D18 + map D21) |
 | regack{match_id} | s->s | - | |
-| state{humans,over,mode} | s->s | - | Live match state (2 s heartbeat while the server is alive, so the entry survives the 5 s reap during long silent bot-only stretches); mode = the mode the server is actually running, so the directory reflects the voted-mode swap; ANY message from a match peer refreshes match liveness |
-| vote{match_id,mode} | c->s | no | D20: vote the match's NEXT mode. Fire-and-forget; one vote per peer per match, last write wins (re-taps/retransmits never inflate) |
+| state{humans,over,mode,map} | s->s | - | Live match state (2 s heartbeat while the server is alive, so the entry survives the 5 s reap during long silent bot-only stretches); mode/map = what the server is actually running, so the directory reflects voted swaps at the next reset; ANY message from a match peer refreshes match liveness |
+| vote{match_id,mode} | c->s | no | D20: vote the match's NEXT mode. Fire-and-forget; one vote per peer per match PER DOMAIN, last write wins (re-taps/retransmits never inflate) |
 | voteresult{match_id,tally,leading,decided,mode} | s->c | - | D20: ack with the running tally; the deciding voter's own ack already shows decided=true |
 | setmode{match_id,mode} | s->s | - | D20: a strict majority decided; forwarded to the registered match server, which stores it for the next in-place match reset (a live match never changes rules mid-fight) |
+| mapvote{match_id,map} | c->s | no | D21: vote the match's NEXT map; same rules as vote, independent tally |
+| mapvoteresult{match_id,tally,leading,decided,map} | s->c | - | D21: ack with the running map tally |
+| setmap{match_id,map} | s->s | - | D21: a strict majority decided the map; the server rebuilds the arena (free old geometry, Arena.build) at the next in-place reset |
 
-### 9.2a Next-match mode voting (D20, round 34)
+### 9.2a Next-match mode + map voting (D20/D21, rounds 34-35)
 
 - **Why the lobby**: the lobby is the only place that knows both the voters
   and the match server, and it already carries the match's mode in reg/assign.
