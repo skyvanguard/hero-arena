@@ -78,7 +78,7 @@ Dispatch is by first magic byte, channel-independent:
 | Magic | Name | Dir | Channel | Payload |
 |---|---|---|---|---|
 | `0x48` | M_HELLO | C→S | reliable | team_size u8, hero_id str, **session u32** (0 = fresh join, else slot token) |
-| `0x53` | M_SLOT | S→C | reliable | result i8 (0 ok, -1 team full, **-2 match over**), ch_id u8, team u8, team_size u8, time f32, target_score u8, match_duration f32, **token u32**, **mode_code u8** (0 TDM, 1 Control, 2 Capture, 3 Escort — the client builds its HUD/mirror for the mode) |
+| `0x53` | M_SLOT | S→C | reliable | result i8 (0 ok, -1 team full, **-2 match over**), ch_id u8, team u8, team_size u8, time f32, target_score u8, match_duration f32, **token u32**, **mode_code u8** (0 TDM, 1 Control, 2 Capture, 3 Escort — the client builds its HUD/mirror for the mode), **map_code u8** (index into MapRegistry.ids() — the client's MIRROR arena is built from the same Map data, D18) |
 | `0x49` | M_INPUT | C→S | unreliable | seq u16, move (f32,f32), yaw f32, pitch f32, fire u8, edges u8, **time_est f32** (client's estimate of the server time this frame was sampled at) |
 | `0x50` | M_SNAPSHOT | S→C | unreliable | seq u16, time f32, score0/1 u8, winner u8, **control (owner u8, progress-team u8, progress u8 — D16)**, **ext u8×4 (mode-specific — D17)**, chars[], projs[] |
 | `0x45` | M_EVENT | S→C | reliable | type u8 + payload |
@@ -276,15 +276,28 @@ Dispatch is by first magic byte, channel-independent:
   clears all objective state (D14 compatibility); a bot with no target in a
   neutral control decides CAPTURE with a goal inside the circle; and 6 bots
   in a live control match start capturing within 30 s (stochastic by design).
-- `tests/test_mode_capture.tscn` — **Capture/CTF mode (round 31, 13
-  checks)**: registry; setup places flags at the CENTRAL spawns (bases);
+- `tests/test_mode_capture.tscn` — **Capture/CTF mode (rounds 31-32,
+  17 checks)**: registry; setup places flags at the CENTRAL spawns (bases);
   enemy-in-radius steals; the carried flag follows the carrier; carrier death
   drops the flag at the death position (through the `World.kill` ->
   `Mode.on_kill` hook); the flag's own team re-secures a drop; an enemy flag
   carried home scores + returns to its base (no win at 1); the 2nd capture
   wins; tied timeout -> the enemy-flag holder, both-flags-free -> draw;
   `World.reset()` returns flags to bases and clears carriers/captures (D14);
-  a bot with no target decides CAPTURE toward the enemy flag.
+  a bot with no target decides CAPTURE toward the enemy flag; objective
+  pressure (D18): a fresh free flag keeps an engaged bot on its ATTACK
+  target, a stale one (free > 8 s) pulls it off, and the free-flag clock
+  accumulates in step and resets on a steal.
+- `tests/test_map.tscn` — **map framework (round 32, 12 checks)**:
+  registry (both maps resolve, unknown/empty -> default); the Crossdocks
+  data equals the legacy placeholder geometry; The Foundry is a distinct
+  original 52 m layout; building from a map applies its spawns to the
+  world; Capture bases and the Escort lane follow the Foundry spawns
+  (modes-on-map-2 integration); an empty Map falls back to the legacy
+  layout; 6 bots fight on Foundry through the full MatchServer stack for
+  8 s within bounds; MatchConfig.map_id drives the host's map; the
+  hero-select picker's named handlers write MatchConfig and reject unknown
+  ids.
 - `tests/test_mode_escort.tscn` — **Escort mode (round 31, 11 checks)**:
   registry; setup pins the lane from the spawn x's; idle payload; one
   attacker pushes at max_speed with real progress; equal heads fully stop
@@ -318,14 +331,15 @@ Dispatch is by first magic byte, channel-independent:
   matched the client count exactly, so the pacing is server-confirmed). This
   is the strongest broadcast-leg evidence available without two physical
   phones; the real-WiFi two-phone sign-off remains the acceptance test.
-- Full battery: 17 headless suites, 301 checks (10 pre-lobby suites at 205 +
+- Full battery: 18 headless suites, 317 checks (10 pre-lobby suites at 205 +
   test_lobby 12 (round 13) + test_net_profiles 30 + test_match_lifecycle 8
   (round 28) + test_relay 7 (round 29) + test_mode_control 15 (round 30) +
-  test_mode_capture 13 + test_mode_escort 11 (round 31)). Note: under heavy
-  machine load (~5 load avg) test_net_profiles intermittently flakes its
-  300 ms RTT reattach (real-time SimLink latency vs a frame-based wait
-  budget); the pristine round-30 baseline fails identically when loaded —
-  pre-existing, not a regression; re-run quiet for a clean sweep.
+  test_mode_capture 17 + test_mode_escort 11 (rounds 31-32) + test_map 12
+  (round 32)). Note: under heavy machine load several net suites flake
+  (frame-based waits vs real-time SimLink latency): test_net_profiles
+  (proven pre-existing at the pristine round-30 baseline), test_net_sim
+  and test_roster (observed once each under a loaded battery; green on
+  re-run). Re-run quiet for a clean sweep.
 
 ## 8. v1.1 tradeoffs (explicit)
 
@@ -372,7 +386,7 @@ reliability**:
   RECEIVED time, not the last pong: a stale pong would re-fire the connect
   branch forever (round-13 bug, fixed).
 
-### 9.2 Message types (lobby protocol v1.1)
+### 9.2 Message types (lobby protocol v1.2)
 
 | Type | Dir | Seq | Notes |
 |---|---|---|---|
@@ -380,8 +394,8 @@ reliability**:
 | hello{region,matches,waiters} | s->c | - | Sent on first ping |
 | join{region,party,skill,name} | c->s | yes | Creates the waiter |
 | queue{stage,waited,open} | s->c | - | >=1 Hz while queued; doubles as keep-alive |
-| assign{host,port,match_id,region,name,stage,waited} | s->c | - | Client then connects to the published game address |
-| reg{ip,port,region,team_size,name} | s->s | yes | A game server registers its match (published address) |
+| assign{host,port,match_id,region,name,mode,stage,waited} | s->c | - | mode = the match's mode id (D18: the queued client sees what it is joining; M_SLOT mode_code is authoritative once connected). Client then connects to the published game address |
+| reg{ip,port,region,team_size,name,mode} | s->s | yes | A game server registers its match (published address; mode since D18) |
 | regack{match_id} | s->s | - | |
 | state{humans,over} | s->s | - | Live match state; ANY message from a match peer refreshes match liveness |
 
