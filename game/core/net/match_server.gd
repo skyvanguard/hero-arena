@@ -380,10 +380,13 @@ func _send_snapshot() -> void:
 				if (HeroRegistry.HEROES[i] as HeroData).id == hd.id:
 					idx = i
 					break
+		var ex: Array = [1, 255, 255, 255, 255]
+		if world.perk_system != null:
+			ex = world.perk_system.char_extra(ch)  # D25 (v1.6)
 		chars.append({
 			id = _id_of(ch), team = ch.team, alive = ch.alive, hero_idx = idx,
 			pos = ch.global_position, rot_y = ch.rotation.y,
-			hp = ch.hp, max_hp = ch.max_hp,
+			hp = ch.hp, max_hp = ch.max_hp, perk_extra = ex,
 		})
 	var projs: Array = []
 	for pr in world.projectiles:
@@ -473,9 +476,27 @@ func _on_world_event(name: String, data: Dictionary) -> void:
 		"heal":
 			buf = NetProtocol.pack_event_heal(_id_of(data.target),
 					_id_of(data.source), float(data.amount))
+		"perk_level_up":
+			var ch: CharacterEntity = data.ch
+			var c: Array = data.choices
+			buf = NetProtocol.pack_event_perk(_id_of(ch), int(data.level),
+					_perk_idx(c[0] if c.size() > 0 else null),
+					_perk_idx(c[1] if c.size() > 1 else null), 255)
+		"perk_picked":
+			var ch2: CharacterEntity = data.ch
+			var pd: PerkData = data.perk
+			buf = NetProtocol.pack_event_perk(_id_of(ch2), int(data.level),
+					_perk_idx(pd), 255, int(data.choice_idx))
 		_:
 			return
 	_send_all(buf)
+
+## D25: perk pool index for the wire (255 = unknown/absent).
+func _perk_idx(d: PerkData) -> int:
+	if d == null or world == null or world.perk_system == null:
+		return 255
+	var pool: PerkPool = world.perk_system.pool
+	return pool.index_of(d.id)
 
 func _send_all(buf: PackedByteArray) -> void:
 	_tx(0, buf, MultiplayerPeer.TRANSFER_MODE_RELIABLE, NetProtocol.CH_RELIABLE)

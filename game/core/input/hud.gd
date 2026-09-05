@@ -1,7 +1,10 @@
 class_name HUD
 extends CanvasLayer
 ## In-match HUD (directive §11/§27): HP, ammo, respawn, kill feed, score,
-## hit marker, damage flash. Glanceable, no monetization noise.
+## hit marker, damage flash, perk choice (D25). Glanceable, no
+## monetization noise.
+
+signal perk_chosen(idx: int)  # D25: card tapped / 1-2 key (-> Controls.perk_pick)
 ##
 ## MEMORY NOTE (Phase 4, verified on the Android emulator / GL renderer):
 ## every canvas invalidation from a Control write churns a 2D canvas
@@ -36,6 +39,12 @@ var _ult_shown := -1.0
 var _ult_ready := false
 var _hp_shown := -1.0
 const FEED_LINES := 6
+var _perk_panel: Control
+var _perk_title: Label
+var _perk_names: Array[Label] = []
+var _perk_descs: Array[Label] = []
+var _perk_badge: Label
+var _perk_shown := false
 
 func setup(world_: World, player_: CharacterEntity) -> void:
 	world = world_
@@ -119,6 +128,72 @@ func _build() -> void:
 	_flash_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(_flash_rect)
 
+	# D25: perk choice panel — built once (fixed nodes, memory rule), shown
+	# on level-up. Two cards (tap or keys 1/2); the pick flows through the
+	# Controls contract like every other action.
+	_perk_panel = Control.new()
+	_perk_panel.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_perk_panel.visible = false
+	root.add_child(_perk_panel)
+	var cw := 250.0
+	var ch := 96.0
+	var gap := 24.0
+	var x0 := vp.x * 0.5 - cw - gap * 0.5
+	var y0 := vp.y * 0.5 - ch * 0.5 - 14.0
+	_perk_title = Label.new()
+	_perk_title.position = Vector2(0, y0 - 30)
+	_perk_title.size = Vector2(vp.x, 24)
+	_perk_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_perk_title.add_theme_font_size_override("font_size", 20)
+	_perk_title.modulate = Color(1.0, 0.92, 0.55)
+	_perk_panel.add_child(_perk_title)
+	for i in 2:
+		var bg := ColorRect.new()
+		bg.color = Color(0.08, 0.1, 0.16, 0.92)
+		bg.position = Vector2(x0 + i * (cw + gap), y0)
+		bg.size = Vector2(cw, ch)
+		_perk_panel.add_child(bg)
+		var nm := Label.new()
+		nm.position = Vector2(x0 + i * (cw + gap) + 12, y0 + 10)
+		nm.size = Vector2(cw - 24, 22)
+		nm.add_theme_font_size_override("font_size", 18)
+		_perk_panel.add_child(nm)
+		var ds := Label.new()
+		ds.position = Vector2(x0 + i * (cw + gap) + 12, y0 + 38)
+		ds.size = Vector2(cw - 24, 48)
+		ds.add_theme_font_size_override("font_size", 13)
+		ds.modulate = Color(0.85, 0.88, 0.95)
+		_perk_panel.add_child(ds)
+		var hint := Label.new()
+		hint.text = "[%d]  TAP" % (i + 1)
+		hint.position = Vector2(x0 + i * (cw + gap) + 12, y0 + ch - 22)
+		hint.size = Vector2(cw - 24, 16)
+		hint.add_theme_font_size_override("font_size", 11)
+		hint.modulate = Color(0.6, 0.7, 0.9)
+		_perk_panel.add_child(hint)
+		_perk_names.append(nm)
+		_perk_descs.append(ds)
+		# The card itself eats the touch (the bg is a child, STOP filter).
+		var card := Control.new()
+		card.position = Vector2(x0 + i * (cw + gap), y0)
+		card.size = Vector2(cw, ch)
+		card.mouse_filter = Control.MOUSE_FILTER_STOP
+		var ci := i
+		card.gui_input.connect(func(ev: InputEvent) -> void:
+			if ev is InputEventScreenTouch and ev.pressed:
+				perk_chosen.emit(ci)
+			elif ev is InputEventMouseButton and ev.pressed \
+					and ev.button_index == MOUSE_BUTTON_LEFT:
+					perk_chosen.emit(ci))
+		_perk_panel.add_child(card)
+	_perk_badge = Label.new()
+	_perk_badge.position = Vector2(24, vp.y - 112)
+	_perk_badge.size = Vector2(280, 16)
+	_perk_badge.add_theme_font_size_override("font_size", 13)
+	_perk_badge.modulate = Color(1.0, 0.9, 0.5)
+	_perk_badge.text = ""
+	root.add_child(_perk_badge)
+
 func _on_world_event(name: String, data: Dictionary) -> void:
 	match name:
 		"hp_changed":
@@ -146,6 +221,21 @@ func _on_world_event(name: String, data: Dictionary) -> void:
 		"kill":
 			_add_feed_line("%s ✕ %s%s" % [
 					str(data.killer), str(data.victim), " (HS)" if data.headshot else ""])
+		"perk_level_up":
+			var chp: CharacterEntity = data.ch
+			if chp == player:
+				_show_perk_cards(data.choices, int(data.level))
+			else:
+				_add_feed_line("%s leveled up" % str(chp.display_name))
+		"perk_picked":
+			var ch2: CharacterEntity = data.ch
+			var pd: PerkData = data.perk
+			if ch2 == player:
+				_perk_panel.visible = false
+				_perk_shown = false
+				_perk_badge.text = "LV%d · %s" % [int(data.level), str(pd.name)]
+			else:
+				_add_feed_line("%s → %s" % [str(ch2.display_name), str(pd.name)])
 		"respawn":
 			pass
 
@@ -156,6 +246,32 @@ func _update_ammo() -> void:
 			_ammo_label.text = "%d / ∞" % w.ammo
 		else:
 			_ammo_label.text = "%d" % w.ammo
+
+func _show_perk_cards(choices: Array, level: int) -> void:
+	_perk_title.text = "LEVEL %d — CHOOSE A PERK" % level
+	for i in 2:
+		if i < choices.size():
+			var d: PerkData = choices[i]
+			_perk_names[i].text = d.name
+			_perk_descs[i].text = d.desc
+		else:
+			_perk_names[i].text = "—"
+			_perk_descs[i].text = ""
+	_perk_panel.visible = true
+	_perk_shown = true
+
+func _unhandled_key_input(event: InputEvent) -> void:
+	# D25 desktop: keys 1/2 pick the perk card (only while the panel is up;
+	# the event is then consumed so it never reaches gameplay input too).
+	if not _perk_shown:
+		return
+	if event is InputEventKey and event.pressed and not event.echo:
+		if event.keycode == KEY_1:
+			perk_chosen.emit(0)
+			event.accept()
+		elif event.keycode == KEY_2:
+			perk_chosen.emit(1)
+			event.accept()
 
 func _add_feed_line(line: String) -> void:
 	# Overwrite the oldest pooled label in place (see MEMORY NOTE).

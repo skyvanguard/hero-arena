@@ -136,6 +136,9 @@ func _start_match(hero_data: HeroData) -> void:
 	if world.mode != null:
 		world.mode.setup(world)
 
+	# D25 (Phase 7): in-match perks; the local world is authoritative offline.
+	_attach_perks()
+
 	var size: int = clampi(MatchConfig.team_size, 1, 6)
 	var team0: Array = world.spawn_points.get(0, [])
 	var team1: Array = world.spawn_points.get(1, [])
@@ -212,6 +215,7 @@ func _spawn_bot(team: int, hero_data: HeroData, spawn: Vector3) -> void:
 		perf.setup(world)
 		if not bool(ProjectSettings.get_setting("debugperf/no_hud", false)):
 			var hud := HUD.new()
+			hud.perk_chosen.connect(func(i: int) -> void: Controls.perk_pick = i)  # D25
 			add_child(hud)
 			_match_nodes.append(hud)
 			hud.setup(world, player)
@@ -563,6 +567,13 @@ func _exit_to_select() -> void:
 	_hero_select.range_deployed.connect(_on_range)
 	_hero_select.net_deployed.connect(_on_net_deploy)
 	_net_client = null
+
+## D25: one PerkSystem per match world (the range deliberately has none:
+## it trains the kit, not the match).
+func _attach_perks() -> void:
+	world.perk_system = PerkSystem.new()
+	world.add_child(world.perk_system)
+	world.perk_system.setup(world, load("res://content/perks/perks.tres"), randi())
 
 func _start_range(hero_data: HeroData) -> void:
 	_in_range = true

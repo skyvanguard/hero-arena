@@ -24,6 +24,9 @@ var winner := -1  # 0 / 1 / -1 (draw or undecided)
 ## The host assigns it (ModeRegistry.get_mode(MatchConfig.mode_id)) before
 ## the first step; Control additionally needs control_point set.
 var mode: Mode = null
+## D25 (Phase 7): in-match perks (XP, levels, choices). null = perks off
+## (headless micro-suites that never load the pool); the host attaches it.
+var perk_system: PerkSystem = null
 ## Control objective state (mode == ControlMode): control_active = the
 ## match runs a point (v1 fixed at control_point, the arena center); owner
 ## (-1 neutral / 0 / 1), 0..1 progress for progress_team, and per-side
@@ -92,6 +95,9 @@ func reset() -> void:
 	flag_free_time = {0: 0.0, 1: 0.0}
 	payload_pos = payload_start_x
 	payload_speed = 0.0
+	# D25: perk state is match-local; the system node persists across resets.
+	if perk_system != null:
+		perk_system.reset()
 
 func setup_spawn(team: int, points: Array[Vector3]) -> void:
 	spawn_points[team] = points
@@ -348,6 +354,8 @@ func kill(target: CharacterEntity, source: CharacterEntity, is_head: bool) -> vo
 		"killer_team" = source.team if source != null else -1,
 		"victim_team" = target.team,
 		"headshot" = is_head,
+		# D25: entity refs (PerkSystem XP; name fields unchanged).
+		"killer_ch" = source, "victim_ch" = target,
 	})
 	if mode != null:
 		mode.on_kill(self, source, target)

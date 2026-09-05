@@ -74,6 +74,11 @@ func step(world_: World, dt: float) -> void:
 			_execute_hold(dt)
 	_ability_timing(dt)
 	_maybe_reload()
+	# D25: bots pick through the same entry point humans do (server
+	# validates), after a short visible delay.
+	if world.perk_system != null and world.perk_system.has_pending(hero) \
+			and world.time - world.perk_system.pending_since(hero) >= PerkSystem.BOT_PICK_DELAY:
+		world.perk_system.bot_pick(hero)
 
 ## --- Execution -----------------------------------------------------------
 func _execute_attack(dt: float) -> void:

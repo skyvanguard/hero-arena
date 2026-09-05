@@ -60,6 +60,11 @@ func _ready() -> void:
 	if world.mode != null:
 		world.mode.setup(world)
 		print("SERVER mode: " + world.mode.mode_id + "  map: " + map_data.map_id)
+	# D25 (Phase 7): in-match perks, server-authoritative; the client mirror
+	# world is render-only (UI state arrives via E_PERK + snapshot fields).
+	world.perk_system = PerkSystem.new()
+	world.add_child(world.perk_system)
+	world.perk_system.setup(world, load("res://content/perks/perks.tres"), randi())
 	net = MatchServer.new()
 	add_child(net)
 	net.setup(world, port, size)
@@ -230,6 +235,9 @@ func _carrier_desc(flag_team: int) -> String:
 ## map decision (arena rebuild) and re-fill the bots with a fresh shuffled
 ## roster, same composition as startup.
 func _on_match_reset() -> void:
+	# D25: fresh seeded choices for the new match (perk state cleared by world.reset).
+	if world.perk_system != null:
+		world.perk_system.seed_base = randi()
 	var pm: String = net.take_pending_map()
 	if pm != "" and pm != net.map_id:
 		_apply_map(pm)

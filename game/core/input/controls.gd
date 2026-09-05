@@ -11,6 +11,7 @@ var reload := false    # edge-triggered; consume_reload()
 var ability1 := false  # edge-triggered; consume_ability1() (Q / Q-btn)
 var ability2 := false  # edge-triggered; consume_ability2() (E / E-btn)
 var ultimate := false  # edge-triggered; consume_ultimate() (F / F-btn)
+var perk_pick := -1    # edge-triggered 0/1; consume_perk_pick() (D25 perk choice)
 
 func consume_aim() -> Vector2:
 	var v := aim
@@ -40,4 +41,10 @@ func consume_ability2() -> bool:
 func consume_ultimate() -> bool:
 	var v := ultimate
 	ultimate = false
+	return v
+
+## D25: -1 = no pick this frame, else the chosen card index (0/1).
+func consume_perk_pick() -> int:
+	var v := perk_pick
+	perk_pick = -1
 	return v

@@ -53,6 +53,9 @@ func step(world: World, dt: float) -> void:
 			ability.cast(1)
 		if Controls.consume_ultimate() and ability != null:
 			ability.activate_ult()
+		var pp := Controls.consume_perk_pick()  # D25 (local world is authoritative)
+		if pp >= 0 and world_ref != null and world_ref.perk_system != null:
+			world_ref.perk_system.pick(self, pp)
 		if camera_rig != null:
 			var aim: Vector2
 			if Controls.aim != Vector2.ZERO:

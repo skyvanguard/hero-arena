@@ -19,6 +19,14 @@ var _ctl_bg: ColorRect
 var _ctl_fg: ColorRect
 var _ctl_label: Label
 var _ctl_shown := ""
+## D25: perk choice (level-up) panel + picked-perk badge.
+signal perk_chosen(idx: int)
+var _perk_panel: Control
+var _perk_title: Label
+var _perk_names: Array[Label] = []
+var _perk_descs: Array[Label] = []
+var _perk_badge: Label
+var _perk_shown := false
 
 func _ready() -> void:
 	layer = 5
@@ -63,6 +71,51 @@ func _ready() -> void:
 	_ctl_label = _mk_label(vp.x * 0.5 - 70.0, 70.0, 140.0, 14.0, 11)
 	_ctl_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_ctl_label.modulate = Color(0.75, 0.8, 0.9)
+	# D25: perk panel (fixed nodes; shown on level-up, picked perk -> badge).
+	_perk_panel = Control.new()
+	_perk_panel.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_perk_panel.visible = false
+	add_child(_perk_panel)
+	var cw := 250.0
+	var chh := 96.0
+	var gap := 24.0
+	var x0 := vp.x * 0.5 - cw - gap * 0.5
+	var y0 := vp.y * 0.5 - chh * 0.5 - 14.0
+	_perk_title = _mk_label(0, y0 - 30, vp.x, 24, 20)
+	_perk_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_perk_title.modulate = Color(1.0, 0.92, 0.55)
+	_perk_panel.add_child(_perk_title)
+	for i in 2:
+		var bg := ColorRect.new()
+		bg.color = Color(0.08, 0.1, 0.16, 0.92)
+		bg.position = Vector2(x0 + i * (cw + gap), y0)
+		bg.size = Vector2(cw, chh)
+		_perk_panel.add_child(bg)
+		var nm := _mk_label(x0 + i * (cw + gap) + 12, y0 + 10, cw - 24, 22, 18)
+		var ds := _mk_label(x0 + i * (cw + gap) + 12, y0 + 38, cw - 24, 48, 13)
+		ds.modulate = Color(0.85, 0.88, 0.95)
+		var hint := _mk_label(x0 + i * (cw + gap) + 12, y0 + chh - 22, cw - 24, 16, 11)
+		hint.text = "[%d]  TAP" % (i + 1)
+		hint.modulate = Color(0.6, 0.7, 0.9)
+		_perk_panel.add_child(nm)
+		_perk_panel.add_child(ds)
+		_perk_panel.add_child(hint)
+		_perk_names.append(nm)
+		_perk_descs.append(ds)
+		var card := Control.new()
+		card.position = Vector2(x0 + i * (cw + gap), y0)
+		card.size = Vector2(cw, chh)
+		card.mouse_filter = Control.MOUSE_FILTER_STOP
+		var ci := i
+		card.gui_input.connect(func(ev: InputEvent) -> void:
+			if ev is InputEventScreenTouch and ev.pressed:
+				perk_chosen.emit(ci)
+			elif ev is InputEventMouseButton and ev.pressed \
+					and ev.button_index == MOUSE_BUTTON_LEFT:
+					perk_chosen.emit(ci))
+		_perk_panel.add_child(card)
+	_perk_badge = _mk_label(12.0, vp.y - 52.0, 200.0, 16.0, 13)
+	_perk_badge.modulate = Color(1.0, 0.9, 0.5)
 
 func _mk_label(x: float, y: float, w: float, h: float, fs: int) -> Label:
 	var l := Label.new()
@@ -105,6 +158,37 @@ func set_state(s: String) -> void:
 	if s != _state_shown:
 		_state_shown = s
 		_state_label.text = s
+
+## D25: show the level-up choice (names/descs come from the client's own
+## perk pool — same resource the server loaded).
+func set_perk_choices(names: Array, descs: Array, level: int) -> void:
+	_perk_title.text = "LEVEL %d — CHOOSE A PERK" % level
+	for i in 2:
+		if i < names.size():
+			_perk_names[i].text = str(names[i])
+			_perk_descs[i].text = str(descs[i])
+		else:
+			_perk_names[i].text = "—"
+			_perk_descs[i].text = ""
+	_perk_panel.visible = true
+	_perk_shown = true
+
+## D25: pick confirmed (or a level-up the player missed) -> badge + hide.
+func set_perk_picked(name: String, level: int) -> void:
+	_perk_panel.visible = false
+	_perk_shown = false
+	_perk_badge.text = "LV%d · %s" % [level, name]
+
+func _unhandled_key_input(event: InputEvent) -> void:
+	if not _perk_shown:
+		return
+	if event is InputEventKey and event.pressed and not event.echo:
+		if event.keycode == KEY_1:
+			perk_chosen.emit(0)
+			event.accept()
+		elif event.keycode == KEY_2:
+			perk_chosen.emit(1)
+			event.accept()
 
 ## Control point state (Phase 6 v1, D16). owner: -1 neutral / 0 / 1; team:
 ## the team progress runs toward (-1 none); progress 0..1. Bar = fill toward

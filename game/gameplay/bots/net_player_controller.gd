@@ -45,3 +45,10 @@ func step(_world: World, _dt: float) -> void:
 		hero.ability.cast(1)
 	if (e & 16) != 0 and hero.ability != null:
 		hero.ability.activate_ult()
+	# D25: perk picks (edge bits 32/64); the server validates through the
+	# same pick() entry point a bot uses (server authority: a wrong index is
+	# simply rejected, the cards stay up).
+	if (e & 32) != 0 and world_ != null and world_.perk_system != null:
+		world_.perk_system.pick(hero, 0)
+	if (e & 64) != 0 and world_ != null and world_.perk_system != null:
+		world_.perk_system.pick(hero, 1)

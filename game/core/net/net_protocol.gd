@@ -36,6 +36,7 @@ const E_KILL := 1
 const E_RESPAWN := 2
 const E_MATCH_OVER := 3
 const E_HEAL := 4
+const E_PERK := 5  # D25 perks: [ch u8, level u8, choice0 u8, choice1 u8, picked u8 (255 = pending)]
 
 # ---- little-endian builders ----
 
@@ -192,7 +193,8 @@ static func unpack_slot(p: PackedByteArray) -> Dictionary:
 			"mode_code": mode_code, "map_code": map_code}
 
 ## input: client -> server (unreliable), INPUT_HZ.
-## edges bitfield: 1 jump, 2 reload, 4 ability1, 8 ability2, 16 ultimate.
+## edges bitfield: 1 jump, 2 reload, 4 ability1, 8 ability2, 16 ultimate,
+## 32 perk_pick0, 64 perk_pick1 (D25).
 ## time_est = the client's estimate of current server time (s); the server
 ## measures one-way latency from it and drives lag compensation.
 static func pack_input(seq: int, move: Vector2, yaw: float, pitch: float,
@@ -253,6 +255,14 @@ static func pack_snapshot(seq: int, time: float, score0: int, score1: int,
 		var pp: Vector3 = pr.pos
 		var dd: Vector3 = pr.dir
 		b += f32s([pp.x, pp.y, pp.z, dd.x, dd.y, dd.z])
+	# D25 (v1.6): perk block at the TAIL (backward compatible: old clients
+	# ignore it, old servers simply don't send it). 5 u8 per char in the
+	# char-list order: [level, perk0, perk1, pend0, pend1] pool indices (255 = none).
+	b += u8(chars.size())
+	for c in chars:
+		var ex: Array = c.get("perk_extra", [1, 255, 255, 255, 255])
+		for v in ex:
+			b += u8(int(v) & 0xFF)
 	return b
 
 static func unpack_snapshot(p: PackedByteArray) -> Dictionary:
@@ -281,6 +291,7 @@ static func unpack_snapshot(p: PackedByteArray) -> Dictionary:
 		c.rot_y = _f32_at(p, o); o += 4
 		c.hp = _f32_at(p, o); o += 4
 		c.max_hp = _f32_at(p, o); o += 4
+		c.perk_extra = []
 		chars.append(c)
 	var m := read_u8(p, o); o += 1
 	var projs: Array = []
@@ -290,6 +301,15 @@ static func unpack_snapshot(p: PackedByteArray) -> Dictionary:
 		pr.pos = Vector3(_f32_at(p, o), _f32_at(p, o + 4), _f32_at(p, o + 8)); o += 12
 		pr.dir = Vector3(_f32_at(p, o), _f32_at(p, o + 4), _f32_at(p, o + 8)); o += 12
 		projs.append(pr)
+	# D25 (v1.6): trailing perk block (absent on older servers).
+	if p.size() >= o + 1 + 5 * n:
+		var pn := read_u8(p, o); o += 1
+		if pn == n:
+			for i in n:
+				var ex: Array = []
+				for k in 5:
+					ex.append(read_u8(p, o)); o += 1
+				chars[i].perk_extra = ex
 	return {"seq": seq, "time": time, "score": [s0, s1], "winner": winner,
 			"control": [owner_code - 1, 2 if team_code > 1 else team_code,
 				progress_q / 255.0],
@@ -348,6 +368,12 @@ static func pack_event_match_over(winner: int, score0: int, score1: int, time: f
 static func pack_event_heal(target: int, source: int, amount: float) -> PackedByteArray:
 	return u8(M_EVENT) + u8(E_HEAL) + u8(target) + u8(source) + f32(amount)
 
+## D25: perk level-up (picked=255, choices = pool indices) or pick
+## confirmation (picked = 0/1). choice0/choice1 = 255 when absent.
+static func pack_event_perk(ch: int, level: int, choice0: int, choice1: int,
+		picked: int) -> PackedByteArray:
+	return u8(M_EVENT) + u8(E_PERK) + u8(ch) + u8(level) + u8(choice0) + u8(choice1) + u8(picked)
+
 static func unpack_event(p: PackedByteArray) -> Dictionary:
 	var t := read_u8(p, 1)
 	var o := 2
@@ -379,4 +405,10 @@ static func unpack_event(p: PackedByteArray) -> Dictionary:
 			d.target = read_u8(p, o); o += 1
 			d.source = read_u8(p, o); o += 1
 			d.amount = _f32_at(p, o)
+		E_PERK:
+			d.ch_id = read_u8(p, o); o += 1
+			d.level = read_u8(p, o); o += 1
+			d.choice0 = read_u8(p, o); o += 1
+			d.choice1 = read_u8(p, o); o += 1
+			d.picked = read_u8(p, o)
 	return d

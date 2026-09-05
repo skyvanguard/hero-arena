@@ -19,6 +19,7 @@ var my_hero_id := ""
 var mp: SceneMultiplayer
 var world: World
 var hud: NetHUD
+var _perk_pool: PerkPool = null  # D25 (client-side name resolution only)
 ## Net-sim transport (Phase 5): when set, send/recv bypass ENet entirely.
 var sim_out: SimLink = null
 var sim_in: SimLink = null
@@ -258,6 +259,10 @@ func _enter() -> void:
 	add_child(hud)
 	hud.my_team = my_team
 	hud.set_state("IN MATCH  ·  slot %d" % my_id)
+	# D25: the client's perk pool (same content resource as the server) for
+	# resolving E_PERK pool indices to names; card taps become input edges.
+	_perk_pool = load("res://content/perks/perks.tres")
+	hud.perk_chosen.connect(_on_perk_chosen)
 	_pred_on = MatchConfig.net_prediction
 	if _pred_on:
 		_pw = World.new()
@@ -380,6 +385,8 @@ func _on_event(d: Dictionary) -> void:
 			if bool(d.headshot):
 				line += " (HS)"
 			hud.set_feed(line)
+		NetProtocol.E_PERK:
+			_on_perk_event(d)
 		NetProtocol.E_MATCH_OVER:
 			var w: int = int(d.winner)
 			var lost := w != -1 and w != my_team
@@ -388,6 +395,40 @@ func _on_event(d: Dictionary) -> void:
 				sc = [sc[1], sc[0]]  # local-team-first for the results overlay
 			_finish(w, sc, float(d.time), lost,
 					"" if w == -1 else ("DEFEAT" if lost else "VICTORY"))
+
+## D25: perk level-up (pending=255) shows the cards for MY slot; a pick
+## confirmation sets the badge. Other slots get a feed line.
+func _on_perk_event(d: Dictionary) -> void:
+	if _perk_pool == null:
+		return
+	var me := int(d.ch_id) == my_id
+	var lvl := int(d.level)
+	var pk := int(d.picked)
+	if me:
+		if pk == 255:
+			var n: Array = []
+			var ds: Array = []
+			for ci in [int(d.choice0), int(d.choice1)]:
+				var p := _perk_pool.get_perk(_perk_pool.perks[ci].id) if ci < _perk_pool.perks.size() else null
+				n.append(p.name if p != null else "—")
+				ds.append(p.desc if p != null else "")
+			hud.set_perk_choices(n, ds, lvl)
+		else:
+			var p2 := _perk_pool.get_perk(_perk_pool.perks[int(d.choice0)].id) if int(d.choice0) < _perk_pool.perks.size() else null
+			hud.set_perk_picked(p2.name if p2 != null else "Perk", lvl)
+	else:
+		var nm: String = ""
+		if pk != 255 and int(d.choice0) < _perk_pool.perks.size():
+			nm = _perk_pool.perks[int(d.choice0)].name
+		if pk == 255:
+			hud.set_feed("A teammate or enemy leveled up (LV%d)" % lvl)
+		elif nm != "":
+			hud.set_feed("Perk: %s" % nm)
+
+func _on_perk_chosen(idx: int) -> void:
+	# The pick rides the next 20 Hz input frame as an edge bit (32/64);
+	# the server validates it (a stale pick is rejected, cards stay up).
+	Controls.perk_pick = idx
 
 func _on_snapshot(d: Dictionary) -> void:
 	_char_order = []
@@ -525,6 +566,11 @@ func _sample_input() -> void:
 		edges |= 8
 	if Controls.consume_ultimate():
 		edges |= 16
+	var ppk := Controls.consume_perk_pick()  # D25: perk choice edges
+	if ppk == 0:
+		edges |= 32
+	elif ppk == 1:
+		edges |= 64
 	var move: Vector2 = Controls.move.limit_length(1.0)
 	var buf := NetProtocol.pack_input(_seq, move, _cam_yaw, _cam_pitch,
 			Controls.fire, edges, _est_server_time())

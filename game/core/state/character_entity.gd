@@ -58,6 +58,7 @@ signal died(ch: CharacterEntity, killer: CharacterEntity)
 @export var coyote_time := 0.12
 @export var jump_buffer_time := 0.15
 @export var respawn_time := 6.0
+var _base_max_hp := 100.0  ## captured in _ready (pre-perk), D25
 @export var spawn_protection := 2.0
 @export var regen_delay := 3.0
 @export var regen_rate := 12.0
@@ -86,6 +87,15 @@ var _since_damage := 1e9
 var protected_until := 0.0
 ## World-clock time of last death (HUD respawn countdown; set by world.kill).
 var death_time := 0.0
+## D25 perks (Phase 7): matched multiplier table applied by PerkSystem on
+## pick (damage / fire_rate / cooldown / speed / max_hp / regen / charge /
+## spread). 1.0 = no effect; read via perk_mult() from the modifier
+## pipeline (AbilityComponent, regen, physics).
+var perk_mults: Dictionary = {}
+func perk_mult(k: String, dflt: float = 1.0) -> float:
+	return float(perk_mults.get(k, dflt))
+func refresh_max_hp() -> void:
+	max_hp = _base_max_hp * perk_mult("max_hp")
 var slow_ratio := 0.0     ## strongest active slow (0..1), decays via slow_until
 var slow_until := 0.0
 ## Server-measured input age for this character (MatchServer, clamped to the
@@ -103,6 +113,7 @@ var _muzzle: Marker3D
 var _body_visible := true
 
 func _ready() -> void:
+	_base_max_hp = max_hp
 	hp = max_hp
 	for c in get_children():
 		if c is Marker3D:
@@ -175,7 +186,7 @@ func _update_regen(world: World, dt: float) -> void:
 		return
 	var cap := max_hp * regen_cap_ratio
 	if _since_damage > regen_delay and hp < cap:
-		hp = minf(hp + regen_rate * dt, cap)
+		hp = minf(hp + regen_rate * perk_mult("regen") * dt, cap)
 		emit_hp()
 
 func _update_physics(world: World, dt: float) -> void:

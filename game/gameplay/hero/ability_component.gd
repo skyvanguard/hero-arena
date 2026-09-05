@@ -86,7 +86,7 @@ func cast(index: int) -> bool:
 		ability_failed.emit(index)
 		return false
 	var ab: AbilityData = hero_data.abilities[index]
-	_cooldown_until[index] = world.time + ab.cooldown * passive_cd_mult()
+	_cooldown_until[index] = world.time + ab.cooldown * passive_cd_mult() * _pm("cooldown")
 	ability_cast.emit(index, ab)
 	world.emit_event("ability_cast", {"hero" = owner_ref, "id" = ab.id, "kind" = ab.kind})
 	_execute(world, ab)
@@ -229,17 +229,21 @@ func is_ult_active() -> bool:
 	var world := _world()
 	return world != null and world.time < _ult_until
 
+## D25: perk multiplier on the owner character (1.0 without a perk).
+func _pm(k: String) -> float:
+	return owner_ref.perk_mult(k) if owner_ref != null else 1.0
+
 func fire_rate_mult() -> float:
-	return _ult_mults.get("fire_rate_mult", 1.0) if is_ult_active() else 1.0
+	return _ult_mults.get("fire_rate_mult", 1.0) * _pm("fire_rate") if is_ult_active() else _pm("fire_rate")
 
 func damage_mult() -> float:
-	return _ult_mults.get("damage_mult", 1.0) if is_ult_active() else 1.0
+	return _ult_mults.get("damage_mult", 1.0) * _pm("damage") if is_ult_active() else _pm("damage")
 
 func speed_mult() -> float:
-	return passive_speed_mult() * _ult_mults.get("speed_mult", 1.0) if is_ult_active() else passive_speed_mult()
+	return passive_speed_mult() * _ult_mults.get("speed_mult", 1.0) * _pm("speed") if is_ult_active() else passive_speed_mult() * _pm("speed")
 
 func spread_mult() -> float:
-	return passive_spread_mult() * _ult_mults.get("spread_mult", 1.0) if is_ult_active() else passive_spread_mult()
+	return passive_spread_mult() * _ult_mults.get("spread_mult", 1.0) * _pm("spread") if is_ult_active() else passive_spread_mult() * _pm("spread")
 
 func passive_speed_mult() -> float:
 	if hero_data.passive != null and hero_data.passive.kind == PassiveData.Kind.SPRINT:
@@ -309,6 +313,8 @@ func on_hit_landed() -> void:
 	_streak_last = world.time
 
 func _add_charge(x: float) -> void:
+	# D25: the charge perk scales every charge source (damage/heal/taken/kill).
+	x *= _pm("charge")
 	if x <= 0.0 or hero_data == null:
 		return
 	if charge >= hero_data.ult_max:

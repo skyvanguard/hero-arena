@@ -1,0 +1,134 @@
+[gd_resource type="Resource" script_class="PerkPool" load_steps=14]
+
+[ext_resource type="Script" path="res://gameplay/perks/perk_pool.gd" id="1_pp"]
+[ext_resource type="Script" path="res://gameplay/perks/perk_data.gd" id="2_pd"]
+
+[sub_resource type="Resource" id="perk_1"]
+script = ExtResource("2_pd")
+id = "overclock"
+tier = 1
+roles = []
+effects = {&"fire_rate": 1.12}
+heal_on_pick = 0
+name = "Overclock"
+desc = "Your weapon cycles 12% faster for the rest of the match."
+
+[sub_resource type="Resource" id="perk_2"]
+script = ExtResource("2_pd")
+id = "heavy_rounds"
+tier = 1
+roles = []
+effects = {&"damage": 1.10}
+heal_on_pick = 0
+name = "Heavy Rounds"
+desc = "Your rounds hit 10% harder."
+
+[sub_resource type="Resource" id="perk_3"]
+script = ExtResource("2_pd")
+id = "adrenaline"
+tier = 1
+roles = []
+effects = {&"speed": 1.08}
+heal_on_pick = 0
+name = "Adrenaline"
+desc = "Move 8% faster."
+
+[sub_resource type="Resource" id="perk_4"]
+script = ExtResource("2_pd")
+id = "second_wind"
+tier = 1
+roles = []
+effects = {&"regen": 1.50}
+heal_on_pick = 0
+name = "Second Wind"
+desc = "Out-of-combat regen is 50% stronger."
+
+[sub_resource type="Resource" id="perk_5"]
+script = ExtResource("2_pd")
+id = "aegis"
+tier = 1
+roles = [1, 2]
+effects = {&"max_hp": 1.15}
+heal_on_pick = 15
+name = "Aegis"
+desc = "Gain 15% more max health and mend for 15."
+
+[sub_resource type="Resource" id="perk_6"]
+script = ExtResource("2_pd")
+id = "charge_focus"
+tier = 1
+roles = []
+effects = {&"charge": 1.25}
+heal_on_pick = 0
+name = "Charge Focus"
+desc = "Your ultimate charges 25% faster."
+
+[sub_resource type="Resource" id="perk_7"]
+script = ExtResource("2_pd")
+id = "rapid_cycle"
+tier = 2
+roles = []
+effects = {&"cooldown": 0.88}
+heal_on_pick = 0
+name = "Rapid Cycle"
+desc = "Ability cooldowns are 12% shorter."
+
+[sub_resource type="Resource" id="perk_8"]
+script = ExtResource("2_pd")
+id = "steady_hands"
+tier = 2
+roles = []
+effects = {&"spread": 0.85}
+heal_on_pick = 0
+name = "Steady Hands"
+desc = "Your shots spray 15% tighter."
+
+[sub_resource type="Resource" id="perk_9"]
+script = ExtResource("2_pd")
+id = "iron_skin"
+tier = 2
+roles = [1]
+effects = {&"max_hp": 1.20}
+heal_on_pick = 20
+name = "Iron Skin"
+desc = "Gain 20% more max health and mend for 20."
+
+[sub_resource type="Resource" id="perk_10"]
+script = ExtResource("2_pd")
+id = "vanguard"
+tier = 2
+roles = [2, 3]
+effects = {&"speed": 1.12}
+heal_on_pick = 0
+name = "Vanguard"
+desc = "Move 12% faster."
+
+[sub_resource type="Resource" id="perk_11"]
+script = ExtResource("2_pd")
+id = "executioner"
+tier = 2
+roles = [0]
+effects = {&"damage": 1.15}
+heal_on_pick = 0
+name = "Executioner"
+desc = "Your rounds hit 15% harder."
+
+[sub_resource type="Resource" id="perk_12"]
+script = ExtResource("2_pd")
+id = "overflow"
+tier = 2
+roles = [2, 3]
+effects = {&"charge": 1.40}
+heal_on_pick = 0
+name = "Overflow"
+desc = "Your ultimate charges 40% faster."
+
+[resource]
+script = ExtResource("1_pp")
+perks = [SubResource("perk_1"), SubResource("perk_2"), SubResource("perk_3"), SubResource("perk_4"), SubResource("perk_5"), SubResource("perk_6"), SubResource("perk_7"), SubResource("perk_8"), SubResource("perk_9"), SubResource("perk_10"), SubResource("perk_11"), SubResource("perk_12")]
+xp_per_damage = 0.05
+xp_per_heal = 0.04
+xp_kill = 12.0
+xp_headshot_bonus = 4.0
+level2_at = 40.0
+level3_at = 100.0
