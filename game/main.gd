@@ -7,6 +7,7 @@ const FIXED_DT := 1.0 / 60.0
 
 var world: World
 var player: Hero
+var _bot_name_idx := [0, 0]
 var bots: Array = []
 var practice: PracticeManager = null
 var _net_client: MatchClient = null
@@ -31,7 +32,9 @@ func _ready() -> void:
 		_start_match(HeroRegistry.default_hero())
 		return
 	_hero_select = HeroSelect.new()
-	add_child(_hero_select)
+	_hero_select.profile = profile
+	_hero_select.progression = progression
+	add_child(_hero_select)  # badge builds in _ready with the profile set
 	_hero_select.hero_deployed.connect(_on_deploy)
 	_hero_select.range_deployed.connect(_on_range)
 	_hero_select.net_deployed.connect(_on_net_deploy)
@@ -120,6 +123,7 @@ func _start_match(hero_data: HeroData) -> void:
 	world.register_character(player)
 
 	# Bot roster: shuffle the six heroes so each match team varies.
+	_bot_name_idx = [0, 0]
 	var roster: Array = HeroRegistry.HEROES.duplicate()
 	roster.shuffle()
 	var rix := 0
@@ -145,6 +149,10 @@ func _start_match(hero_data: HeroData) -> void:
 
 func _spawn_bot(team: int, hero_data: HeroData, spawn: Vector3) -> void:
 	var b := HeroFactory.create(team, false, hero_data.color, hero_data)
+	# Unique display name per team (the factory's random names collide on
+	# small teams; the results table and kill feed must stay readable).
+	b.display_name = "Bot %d" % (team * 10 + int(_bot_name_idx[team]))
+	_bot_name_idx[team] += 1
 	b.position = spawn
 	# Face across the map toward the enemy side.
 	b.rotation.y = PI if team == 0 else 0.0
