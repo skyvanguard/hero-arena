@@ -30,6 +30,23 @@ var _history: Dictionary = {}      # ch -> Array[[pos: Vector3, rot_y: float]] (
 func emit_event(name: String, data: Dictionary) -> void:
 	world_event.emit(name, data)
 
+## In-place match reset (Phase 5 lifecycle, round 28): fresh time/score/over
+## state on the same world node (arena + spawn points persist). The caller
+## frees characters/projectiles/zones first (node lifetime is the caller's)
+## and clears MatchServer slot state; pending timers are dropped (their
+## targets - freed characters - would be skipped by the validity guard,
+## but a finished match's timers carry no meaning into the next one).
+func reset() -> void:
+	time = 0.0
+	score = {0: 0, 1: 0}
+	match_over = false
+	winner = -1
+	characters.clear()
+	projectiles.clear()
+	zones.clear()
+	_timers.clear()
+	_history.clear()
+
 func setup_spawn(team: int, points: Array[Vector3]) -> void:
 	spawn_points[team] = points
 

@@ -10,6 +10,7 @@ var world: World
 var net: MatchServer
 var disc: Discovery
 var lob: LobbyClient = null
+var _team_size := 3
 var _accum := 0.0
 var _lob_last_humans := -1
 var _lob_last_over := false
@@ -34,6 +35,8 @@ func _ready() -> void:
 	net = MatchServer.new()
 	add_child(net)
 	net.setup(world, port, size)
+	_team_size = size
+	net.match_reset.connect(_on_match_reset)
 	_fill_teams(size)
 	# LAN discovery responder (UDP ping/reply with live match state).
 	disc = Discovery.new()
@@ -99,6 +102,12 @@ func _register_lobby(port: int, size: int) -> void:
 		lob.register_match(lip_f, port_f, lregion_f, size_f, lname_f))
 	print("SERVER lobby registration at %s (advertising %s, region %s)" % [
 			lobby_addr, lip_f, lregion_f])
+
+## A fresh match started in place (MatchServer.reset_match, triggered by a
+## join into an over match with no humans left): re-fill the bots with a
+## fresh shuffled roster, same composition as startup.
+func _on_match_reset() -> void:
+	_fill_teams(_team_size)
 
 func _fill_teams(size: int) -> void:
 	# Same roster variety as the offline match (main.gd): shuffled heroes.

@@ -17,6 +17,10 @@ var slots: Dictionary = {}
 ## carrying the same token reattaches to the same character (Phase 5
 ## reconnect); a fresh join may still yield a bot behind it.
 var _frozen: Dictionary = {}
+## Emitted after reset_match(): the scene re-fills the bots (it owns the
+## roster). v1 only resets when no human is connected, so no client sees
+## the transition itself.
+signal match_reset
 ## Net-sim transport (Phase 5): when set, send/recv bypass ENet entirely.
 ## sim_out carries this endpoint's latency/loss; sim_in is polled in tick().
 var sim_out: SimLink = null
@@ -114,6 +118,20 @@ func _on_peer_packet(id: int, buf: PackedByteArray) -> void:
 
 func _on_hello(from: int, d: Dictionary) -> void:
 	var session := int(d.get("session", 0))
+	if world.match_over:
+		if slots.is_empty():
+			# Finished match with no active humans left: this join (fresh,
+			# or a returning token holder) starts a fresh match in place.
+			# The reset clears _frozen, so a returning owner fresh-joins
+			# the new match (their old token is invalidated).
+			reset_match()
+		else:
+			# Other humans are still connected (watching the final): v1 has
+			# no mid-observation reset - reject with the over code.
+			_send_to(from, NetProtocol.pack_slot(-2, 0, 0, team_size, world.time,
+					world.target_score, world.match_duration))
+			print("SERVER peer %d rejected: match over" % from)
+			return
 	if session != 0 and _frozen.has(session) and not world.match_over:
 		if _reattach(from, session):
 			return
@@ -228,6 +246,29 @@ func spawn_bot(team: int, hero_data: HeroData, spawn: Vector3) -> Hero:
 	bc.setup(ch, null, world, MatchConfig.difficulty)
 	ch.controller = bc
 	return ch
+
+## New match in place (Phase 5 lifecycle v1): frees every character,
+## projectile and zone, clears slot/frozen state (frozen tokens are
+## invalidated) and re-arms the world via World.reset(). Bots are
+## re-spawned by the scene through the match_reset signal. Server authority
+## is untouched: this only happens on a hello, between physics ticks.
+func reset_match() -> void:
+	for ch in world.characters.duplicate():
+		_free_character(ch)
+	for pr in world.projectiles.duplicate():
+		if is_instance_valid(pr):
+			pr.free()
+	for z in world.zones.duplicate():
+		if is_instance_valid(z):
+			z.free()
+	_frozen.clear()
+	slots.clear()
+	team_humans = [0, 0]
+	next_id = 0
+	world.reset()
+	_snap_acc = 0.0
+	print("SERVER match reset (fresh match in place, next_id=0)")
+	match_reset.emit()
 
 func _is_frozen(ch: CharacterEntity) -> bool:
 	for f in _frozen.values():

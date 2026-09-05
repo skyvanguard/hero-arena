@@ -129,6 +129,22 @@ Dispatch is by first magic byte, channel-independent:
   re-hello falls through to a normal join). Client side: bounded retry
   (`MAX_RECONNECTS = 6`, 0.5 s cadence) re-creates the ENet peer and re-hellos
   with the stored token; the server never sees more than the slot.
+- **Match lifecycle after over (round 28, v1)**: when a match is finished,
+  a fresh hello starts a new match **in place** — but only when no other
+  human is connected (`slots` empty; all prior humans have left, their slots
+  frozen). `MatchServer.reset_match()` frees every character/projectile/zone,
+  clears `slots` + `_frozen` (frozen tokens are **invalidated** — a returning
+  owner fresh-joins the new match, they do not reattach to a freed body),
+  zeroes `team_humans`/`next_id`, and calls `World.reset()` (fresh
+  time/score/over/winner on the same world + arena). The scene re-fills the
+  bots through the `match_reset` signal (it owns the roster). Joins into an
+  over match that still has connected humans are rejected with the over code
+  (client shows the existing "MATCH OVER" finish) — v1 has no mid-
+  observation reset. Discovery/lobby state is derived from `match_over`, so
+  the match advertises OPEN again automatically. Server authority is
+  untouched: the reset happens on a hello, between physics ticks, and the
+  v1 invariant (nobody connected sees the transition) means no new wire
+  messages were needed.
 - Kill feed / match-over on the client come from the reliable event channel,
   not from watching snapshots.
 
@@ -221,6 +237,14 @@ Dispatch is by first magic byte, channel-independent:
   at 150 ms, 3.0 m at 300 ms. Connect/slot, input roundtrip, combat + kill
   feed, and the drop → freeze → token reattach path all hold at every
   profile.
+- `tests/test_match_lifecycle.tscn` — **in-place match reset (round 28, 8
+  checks)**: sim transport, target 1 (first bot kill ends the match): join a
+  live match, wait for over, a fresh join while a human is still connected
+  is rejected (over code, no slot), the last human leaves (slot frozen), a
+  fresh join resets the match in place (score/time/over cleared, 6-char
+  roster + joiner), a pre-reset token fresh-joins instead of reattaching to
+  the freed character, and the fresh match steps + streams broadcast
+  snapshots.
 - `tests/test_discovery.tscn` — UDP ping/reply over loopback (6 checks):
   open server answers with game port + state + humans, join reflected in the
   headcount, full and over states advertised (over wins over full), dead port
@@ -247,8 +271,9 @@ Dispatch is by first magic byte, channel-independent:
   matched the client count exactly, so the pacing is server-confirmed). This
   is the strongest broadcast-leg evidence available without two physical
   phones; the real-WiFi two-phone sign-off remains the acceptance test.
-- Full battery: 12 headless suites, 247 checks (10 pre-lobby suites at 205 +
-  test_lobby 12 (round 13) + test_net_profiles 30 (round 28)).
+- Full battery: 13 headless suites, 255 checks (10 pre-lobby suites at 205 +
+  test_lobby 12 (round 13) + test_net_profiles 30 + test_match_lifecycle 8
+  (both round 28)).
 
 ## 8. v1.1 tradeoffs (explicit)
 
