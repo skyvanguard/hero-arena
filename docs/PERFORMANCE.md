@@ -119,6 +119,12 @@ uncompressed (the Godot binary dominates).
 - Headless emulators (no window / no KVM-gpu) can fail Vulkan present with
   VK_ERROR_OUT_OF_DATE. For emulator smoke tests, temporarily switch
   `renderer/rendering_method` to `gl_compatibility`; shipping builds use `mobile`.
+  **The working combo is `-gpu angle_indirect` + gl_compatibility** (host
+  ANGLE->Mesa, the Phase 1/2 config). Verified round 32: `-gpu
+  swiftshader_indirect` + gl_compatibility fails with `CanvasShaderGLES3:
+  Fragment shader active uniforms exceed GL_MAX_FRAGMENT_UNIFORM_VECTORS
+  (261)` (uniform gray screen, input still partially live), and
+  angle_indirect + mobile stalls on Vulkan present.
 - `PerfProbe` (game/core/util/perf_probe.gd) logs `PERF <fps> fps (worst frame
   <ms>)` every 5 s to logcat — filter with `adb logcat -s godot`.
 - Memory watch used for the Phase 4 bisect: `adb shell dumpsys meminfo
