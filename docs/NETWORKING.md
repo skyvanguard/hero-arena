@@ -82,6 +82,7 @@ Dispatch is by first magic byte, channel-independent:
 | `0x49` | M_INPUT | C→S | unreliable | seq u16, move (f32,f32), yaw f32, pitch f32, fire u8, edges u8, **time_est f32** (client's estimate of the server time this frame was sampled at) |
 | `0x50` | M_SNAPSHOT | S→C | unreliable | seq u16, time f32, score0/1 u8, winner u8, **control (owner u8, progress-team u8, progress u8 — D16)**, **ext u8×4 (mode-specific — D17)**, chars[], projs[] |
 | `0x45` | M_EVENT | S→C | reliable | type u8 + payload |
+| `0x54` | M_STATS | S→C | reliable | n u8 + per char (world.characters order, same index as the snapshot char list): team u8, kills u8, deaths u8, damage u16 — sent on match_over, BEFORE the over event (D19 results) |
 | `0x44` | M_DISCOVER_PING | C→S | UDP discovery port | client name str |
 | `0x46` | M_DISCOVER_REPLY | S→C | UDP discovery port | state u8 (0 open, 1 full, 2 over), team_size u8, humans u8, target_score u8, game_port u16, name str, time f32 |
 
@@ -298,6 +299,18 @@ Dispatch is by first magic byte, channel-independent:
   8 s within bounds; MatchConfig.map_id drives the host's map; the
   hero-select picker's named handlers write MatchConfig and reject unknown
   ids.
+- `tests/test_results.tscn` — **results + progression (round 33, 17
+  checks)**: server-side stat accumulation (damage_dealt tracks the final
+  applied amount, kill credits killer+victim, source-less kills count the
+  death only); World.stats_rows() follows the character-list order; MVP
+  selection (most kills, damage tie-break, -1 when no kills); M_STATS
+  pack/unpack roundtrip (u16 damage lane); end-to-end over the real ENet
+  loopback with the explicit tick() driving (the client slotted, the human
+  kills to the target, M_STATS arrives before the over event with the
+  final table, the client finishes); ProgressionConfig level curve is
+  strictly increasing; PlayerProfile XP rules (win+kills+MVP multi-level-up,
+  participation XP, per-hero record) and save/load roundtrip; the
+  hero-select progression badge renders.
 - `tests/test_mode_escort.tscn` — **Escort mode (round 31, 11 checks)**:
   registry; setup pins the lane from the spawn x's; idle payload; one
   attacker pushes at max_speed with real progress; equal heads fully stop
@@ -331,11 +344,11 @@ Dispatch is by first magic byte, channel-independent:
   matched the client count exactly, so the pacing is server-confirmed). This
   is the strongest broadcast-leg evidence available without two physical
   phones; the real-WiFi two-phone sign-off remains the acceptance test.
-- Full battery: 18 headless suites, 317 checks (10 pre-lobby suites at 205 +
+- Full battery: 19 headless suites, 334 checks (10 pre-lobby suites at 205 +
   test_lobby 12 (round 13) + test_net_profiles 30 + test_match_lifecycle 8
   (round 28) + test_relay 7 (round 29) + test_mode_control 15 (round 30) +
   test_mode_capture 17 + test_mode_escort 11 (rounds 31-32) + test_map 12
-  (round 32)). Note: under heavy machine load several net suites flake
+  (round 32) + test_results 17 (round 33)). Note: under heavy machine load several net suites flake
   (frame-based waits vs real-time SimLink latency): test_net_profiles
   (proven pre-existing at the pristine round-30 baseline), test_net_sim
   and test_roster (observed once each under a loaded battery; green on
