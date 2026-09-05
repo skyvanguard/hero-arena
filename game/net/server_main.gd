@@ -9,6 +9,7 @@ const FIXED_DT := 1.0 / 60.0
 var world: World
 var net: MatchServer
 var disc: Discovery
+var arena: Node = null  # D21: owned here so a voted map swap can rebuild it
 var lob: LobbyClient = null
 var _team_size := 3
 var _relay: RelayClient = null
@@ -50,7 +51,7 @@ func _ready() -> void:
 	# (content/maps/*.tres); the client's mirror arena gets the same map via
 	# the M_SLOT map_code.
 	var map_data: Map = MapRegistry.get_map(MatchConfig.map_id)
-	var arena := Arena.build(world, map_data)
+	arena = Arena.build(world, map_data)
 	add_child(arena)
 	# Mode framework v1 (Phase 6, D16/D17): rules as a data resource; the
 	# mode seeds the world's objective state (control point / CTF flags /
@@ -155,6 +156,11 @@ func _do_lobby_register() -> void:
 	lob.setmode.connect(func(i: Dictionary) -> void:
 		net.set_mode_from_lobby(str(i.get("mode", "")))
 	)
+	# D21: a decided map vote arrives as setmap; applied (arena rebuild)
+	# at the next in-place match reset, same "no mid-fight changes" rule.
+	lob.setmap.connect(func(i: Dictionary) -> void:
+		net.set_map_from_lobby(str(i.get("map", "")))
+	)
 	var lip_f := lip
 	var port_f := port
 	if _relay != null and _relay_vport > 0:
@@ -172,8 +178,9 @@ func _do_lobby_register() -> void:
 	var lname_f := lname if lname != "" else ("match @" + lip_f)
 	var size_f := size
 	var mode_f := world.mode.mode_id if world.mode != null else "tdm"
+	var map_f := MatchConfig.map_id
 	lob.connected_ok.connect(func() -> void:
-		lob.register_match(lip_f, port_f, lregion_f, size_f, lname_f, mode_f))
+		lob.register_match(lip_f, port_f, lregion_f, size_f, lname_f, mode_f, map_f))
 	print("SERVER lobby registration at %s (advertising %s:%d, region %s)" % [
 			lobby_addr, lip_f, port_f, lregion_f])
 
@@ -219,10 +226,26 @@ func _carrier_desc(flag_team: int) -> String:
 	return "carried(t%d)" % int(ch.team)
 
 ## A fresh match started in place (MatchServer.reset_match, triggered by a
-## join into an over match with no humans left): re-fill the bots with a
-## fresh shuffled roster, same composition as startup.
+## join into an over match with no humans left): apply any pending lobby
+## map decision (arena rebuild) and re-fill the bots with a fresh shuffled
+## roster, same composition as startup.
 func _on_match_reset() -> void:
+	var pm: String = net.take_pending_map()
+	if pm != "" and pm != net.map_id:
+		_apply_map(pm)
 	_fill_teams(_team_size)
+
+## D21: swap the arena to a voted map. Only ever called between matches
+## (reset_match already freed every character), so the old geometry can be
+## dropped immediately.
+func _apply_map(map_id: String) -> void:
+	if is_instance_valid(arena):
+		arena.free()
+	var md: Map = MapRegistry.get_map(map_id)
+	arena = Arena.build(world, md)
+	add_child(arena)
+	net.map_id = map_id
+	print("SERVER map swapped: " + map_id)
 
 func _fill_teams(size: int) -> void:
 	# Same roster variety as the offline match (main.gd): shuffled heroes.
@@ -259,4 +282,4 @@ func _physics_process(delta: float) -> void:
 			_lob_last_humans = humans
 			_lob_last_over = world.match_over
 			var lob_mode := str(world.mode.mode_id) if world.mode != null else "tdm"
-			lob.send_state(humans, world.match_over, lob_mode)
+			lob.send_state(humans, world.match_over, lob_mode, net.map_id)

@@ -43,6 +43,7 @@ var map_id := "crossdocks"
 ## configured mode). Applied in reset_match() - the in-place new-match
 ## point, so no live match ever changes rules under its players.
 var _pending_mode := ""
+var _pending_map := ""  # D21: voted map, applied at the next in-place reset
 
 func setup(w: World, p: int, ts: int) -> void:
 	world = w
@@ -300,6 +301,22 @@ func set_mode_from_lobby(mode_id: String) -> void:
 		current = str(world.mode.mode_id)
 	_pending_mode = mode_id
 	print("SERVER voted mode accepted: " + mode_id + " (next match; current " + current + ")")
+
+## D21: the lobby decided the map for the NEXT match. The scene (which
+## owns the arena nodes) applies it via take_pending_map() on the next
+## reset; like the mode, the running match never changes rules mid-fight.
+func set_map_from_lobby(map_id: String) -> void:
+	if map_id == "" or not MapRegistry.ids().has(map_id):
+		return
+	if map_id == _pending_map:
+		return
+	_pending_map = map_id
+	print("SERVER voted map accepted: " + map_id + " (next match; current " + self.map_id + ")")
+
+func take_pending_map() -> String:
+	var pm := _pending_map
+	_pending_map = ""
+	return pm
 
 func _is_frozen(ch: CharacterEntity) -> bool:
 	for f in _frozen.values():

@@ -176,10 +176,14 @@ func _dispatch(key: String, msg: Dictionary) -> void:
 				over = false,
 				name = str(msg.get("name", "match")),
 				mode = str(msg.get("mode", "tdm")),
+				map = str(msg.get("map", "crossdocks")),
 				last_seen = time,
 				votes = {},
 				vote_source = {},
 				decided = false,
+				map_votes = {},
+				map_vote_source = {},
+				map_decided = false,
 			}
 			_send(key, {t = LobbyProtocol.T_REGACK, match_id = id})
 			match_registered.emit(matches[id].duplicate())
@@ -197,8 +201,13 @@ func _dispatch(key: String, msg: Dictionary) -> void:
 				var new_mode := str(msg.get("mode", ""))
 				if new_mode != "" and ModeRegistry.ids().has(new_mode):
 					m.mode = new_mode
+				var new_map := str(msg.get("map", ""))
+				if new_map != "" and MapRegistry.ids().has(new_map):
+					m.map = new_map
 		LobbyProtocol.T_VOTE:
-			_on_vote(key, msg)
+			_on_vote(key, msg, "mode")
+		LobbyProtocol.T_MAPVOTE:
+			_on_vote(key, msg, "map")
 		_:
 			pass
 	# Any message from a match server (ping included) keeps the match alive.
@@ -206,11 +215,12 @@ func _dispatch(key: String, msg: Dictionary) -> void:
 	if mid2 != 0:
 		matches[mid2].last_seen = time
 
-## D20 vote: one vote per peer per match, last write wins (a re-tap or a
-## retransmit never inflates the tally). Strict majority with >= 2 votes
-## decides; the decision updates the directory entry and is forwarded to
+## D20/D21 vote: one vote per peer per match PER DOMAIN (mode and map are
+## independent tallies), last write wins (a re-tap or a retransmit never
+## inflates the tally). Strict majority with >= 2 votes decides each domain
+## separately; the decision updates the directory entry and is forwarded to
 ## the match server, which applies it at the next in-place reset.
-func _on_vote(key: String, msg: Dictionary) -> void:
+func _on_vote(key: String, msg: Dictionary, kind: String = "mode") -> void:
 	var mid := int(msg.get("match_id", 0))
 	var m: Dictionary = matches.get(mid, {})
 	# Over matches are votable: the vote targets the NEXT match, and the
@@ -218,51 +228,66 @@ func _on_vote(key: String, msg: Dictionary) -> void:
 	if m.is_empty():
 		_send(key, {t = "err", reason = "no such match " + str(mid)})
 		return
-	var opt := str(msg.get("mode", ""))
-	if not ModeRegistry.ids().has(opt):
-		_send(key, {t = "err", reason = "bad mode " + opt})
+	var opt := str(msg.get(kind, ""))
+	var ids: Array = ModeRegistry.ids() if kind == "mode" else MapRegistry.ids()
+	if not ids.has(opt):
+		_send(key, {t = "err", reason = "bad " + kind + " " + opt})
 		return
+	var tally: Dictionary = m.votes if kind == "mode" else m.map_votes
+	var source: Dictionary = m.vote_source if kind == "mode" else m.map_vote_source
 	# Last write wins: retract the previous vote (if any) before counting
-	# the new one - a same-mode re-vote is idempotent (net zero).
-	var prev := str(m.vote_source.get(key, ""))
+	# the new one - a same-choice re-vote is idempotent (net zero).
+	var prev := str(source.get(key, ""))
 	if prev != "":
-		m.votes[prev] = int(m.votes[prev]) - 1
-	m.vote_source[key] = opt
-	m.votes[opt] = int(m.votes.get(opt, 0)) + 1
+		tally[prev] = int(tally[prev]) - 1
+	source[key] = opt
+	tally[opt] = int(tally.get(opt, 0)) + 1
 	# Decide BEFORE acking: the voter who casts the deciding vote sees
 	# decided=true in the very response that caused it.
-	_try_decide(int(mid), m)
-	_send(key, {
-		t = LobbyProtocol.T_VOTERESULT, match_id = mid,
-		tally = m.votes.duplicate(true), leading = _leading(m),
-		decided = bool(m.decided), mode = str(m.mode),
-	})
+	_try_decide(int(mid), m, kind)
+	var resp := {
+		t = LobbyProtocol.T_VOTERESULT if kind == "mode" else LobbyProtocol.T_MAPVOTERESULT,
+		match_id = mid,
+		tally = tally.duplicate(true), leading = _leading(m, kind),
+		decided = bool(m.decided if kind == "mode" else m.map_decided),
+	}
+	resp[kind] = str(m.mode if kind == "mode" else m.map)
+	_send(key, resp)
 
-func _leading(m: Dictionary) -> String:
+func _leading(m: Dictionary, kind: String = "mode") -> String:
+	var tally: Dictionary = m.votes if kind == "mode" else m.map_votes
 	var best := ""
 	var best_n := 0
-	for k in m.votes:
-		if int(m.votes[k]) > best_n:
-			best_n = int(m.votes[k])
+	for k in tally:
+		if int(tally[k]) > best_n:
+			best_n = int(tally[k])
 			best = str(k)
 	return best
 
-func _try_decide(mid: int, m: Dictionary) -> void:
-	if bool(m.decided):
+func _try_decide(mid: int, m: Dictionary, kind: String = "mode") -> void:
+	if bool(m.decided if kind == "mode" else m.map_decided):
 		return
+	var tally: Dictionary = m.votes if kind == "mode" else m.map_votes
 	var total := 0
-	for v in m.votes.values():
+	for v in tally.values():
 		total += int(v)
 	if total < 2:
 		return
-	var winner := _leading(m)
-	if winner == "" or int(m.votes[winner]) * 2 <= total:
+	var winner := _leading(m, kind)
+	if winner == "" or int(tally[winner]) * 2 <= total:
 		return  # no strict majority
-	m.decided = true
-	m.mode = winner
-	_send(str(m.key), {t = LobbyProtocol.T_SETMODE, match_id = mid, mode = winner})
-	print("LOBBY match %d mode voted: %s (%d/%d votes)" % [
-			mid, winner, int(m.votes[winner]), total])
+	if kind == "mode":
+		m.decided = true
+		m.mode = winner
+	else:
+		m.map_decided = true
+		m.map = winner
+	var st: String = LobbyProtocol.T_SETMODE if kind == "mode" else LobbyProtocol.T_SETMAP
+	var fmsg := {t = st, match_id = mid}
+	fmsg[kind] = winner
+	_send(str(m.key), fmsg)
+	print("LOBBY match %d %s voted: %s (%d/%d votes)" % [
+			mid, kind, winner, int(tally[winner]), total])
 
 func _match_id_of(key: String) -> int:
 	for id in matches.keys():
@@ -361,8 +386,11 @@ func _run_queue() -> void:
 				t = LobbyProtocol.T_ASSIGN,
 				host = str(m.ip), port = int(m.port), match_id = int(pick.id),
 				region = str(m.region), name = str(m.name), mode = str(m.mode),
-				tally = m.votes.duplicate(true), leading = _leading(m),
+				map = str(m.map),
+				tally = m.votes.duplicate(true), leading = _leading(m, "mode"),
 				decided = bool(m.decided),
+				map_tally = m.map_votes.duplicate(true),
+				map_leading = _leading(m, "map"), map_decided = bool(m.map_decided),
 				stage = stage, waited = time - float(w.joined_at),
 			})
 			client_assigned.emit({host = str(m.ip), port = int(m.port),

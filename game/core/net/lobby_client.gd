@@ -25,6 +25,8 @@ signal assign(info: Dictionary)
 signal regack(info: Dictionary)
 signal vote_result(info: Dictionary)
 signal setmode(info: Dictionary)  # match servers: a vote decided the mode
+signal map_vote_result(info: Dictionary)
+signal setmap(info: Dictionary)   # match servers: a vote decided the map (D21)
 
 var host := ""
 var port := 0
@@ -70,13 +72,16 @@ func setup(h: String, p: int) -> void:
 ## queued client knows what it is joining (M_SLOT mode_code stays
 ## authoritative once connected).
 func register_match(ip: String, game_port: int, region: String,
-		team_size: int, name: String, mode: String = "tdm") -> void:
+		team_size: int, name: String, mode: String = "tdm",
+		map: String = "") -> void:
 	if _seq_reg > 0 and not _pending_reg.is_empty():
 		return  # already registered / in flight
 	_seq_reg += 1
 	var m := {t = LobbyProtocol.T_REG, seq = _seq_reg, ip = ip,
 			port = game_port, region = region, team_size = team_size, name = name,
 			mode = mode}
+	if map != "":
+		m.map = map
 	_pending_reg = {msg = m, next_at = Time.get_ticks_msec()}
 	_put(m)
 
@@ -90,14 +95,19 @@ func join_queue(region: String, party: int, skill: int, name: String) -> void:
 			started_at = now, params = [region, party, skill, name]}
 	_put(m)
 
-func send_state(humans: int, over: bool, mode := "") -> void:
-	_put({t = LobbyProtocol.T_STATE, humans = humans, over = over, mode = mode})
+func send_state(humans: int, over: bool, mode := "", map := "") -> void:
+	_put({t = LobbyProtocol.T_STATE, humans = humans, over = over,
+			mode = mode, map = map})
 
 ## D20: vote a match's next mode (one vote per client, last write wins).
 ## Fire-and-forget: a lost vote simply isn't counted - the player can
 ## re-tap; the lobby dedupes by peer, never by seq.
 func vote(match_id: int, mode: String) -> void:
 	_put({t = LobbyProtocol.T_VOTE, match_id = match_id, mode = mode})
+
+## D21: vote a match's next map (same rules as vote()).
+func map_vote(match_id: int, map: String) -> void:
+	_put({t = LobbyProtocol.T_MAPVOTE, match_id = match_id, map = map})
 
 func ping() -> void:
 	_seq_ping += 1
@@ -192,5 +202,9 @@ func _dispatch(msg: Dictionary) -> void:
 		vote_result.emit(msg)
 	elif t == LobbyProtocol.T_SETMODE:
 		setmode.emit(msg)
+	elif t == LobbyProtocol.T_MAPVOTERESULT:
+		map_vote_result.emit(msg)
+	elif t == LobbyProtocol.T_SETMAP:
+		setmap.emit(msg)
 	elif t == "err":
 		print("LOBBY-CLIENT error: %s" % str(msg.get("reason", "?")))

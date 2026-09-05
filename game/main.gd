@@ -11,6 +11,7 @@ var _bot_name_idx := [0, 0]
 ## D20: next-match mode vote (results screen, net + lobby matches only).
 var _vote_lob: LobbyClient = null
 var _vote_status: Label = null
+var _map_vote_status: Label = null
 var _net_match_id := 0
 var bots: Array = []
 var practice: PracticeManager = null
@@ -382,7 +383,45 @@ func _show_results(winner: int, score: Array, wtime: float, title_override := ""
 		_vote_status.add_theme_font_size_override("font_size", 14)
 		_vote_status.modulate = Color(0.7, 0.78, 0.9)
 		_results.add_child(_vote_status)
-		y += 92.0
+		# D21: the second voting domain - the next match's map. Same rules;
+		# the server rebuilds the arena at the next in-place reset.
+		var ml2 := Label.new()
+		ml2.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		ml2.text = "NEXT MATCH  -  VOTE THE MAP"
+		ml2.position = Vector2(vp.x * 0.5 - 200, y + 96)
+		ml2.size = Vector2(400, 20)
+		ml2.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		ml2.add_theme_font_size_override("font_size", 14)
+		ml2.modulate = Color(0.55, 0.6, 0.75)
+		_results.add_child(ml2)
+		var mb_w := 110.0
+		var mb_gap := 10.0
+		var map_ids: Array = MapRegistry.ids()
+		var mb_total := float(map_ids.size()) * mb_w + float(map_ids.size() - 1) * mb_gap
+		var mb_x := vp.x * 0.5 - mb_total * 0.5
+		for i in map_ids.size():
+			var vb2 := Button.new()
+			var md: Map = MapRegistry.get_map(str(map_ids[i]))
+			var lbl := str(md.display_name)
+			if lbl.begins_with("The "):
+				lbl = lbl.substr(4)
+			vb2.text = lbl.to_upper()
+			vb2.position = Vector2(mb_x + float(i) * (mb_w + mb_gap), y + 120)
+			vb2.size = Vector2(mb_w, 30)
+			vb2.add_theme_font_size_override("font_size", 13)
+			var mopt := str(map_ids[i])
+			vb2.pressed.connect(func() -> void: _cast_map_vote(mopt))
+			_results.add_child(vb2)
+		_map_vote_status = Label.new()
+		_map_vote_status.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_map_vote_status.text = "tap a map - applies to the NEXT match"
+		_map_vote_status.position = Vector2(vp.x * 0.5 - 200, y + 156)
+		_map_vote_status.size = Vector2(400, 20)
+		_map_vote_status.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		_map_vote_status.add_theme_font_size_override("font_size", 14)
+		_map_vote_status.modulate = Color(0.7, 0.78, 0.9)
+		_results.add_child(_map_vote_status)
+		y += 184.0
 	var hint := Label.new()
 	hint.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var mins := int(wtime) / 60
@@ -405,28 +444,43 @@ func _start_vote_lobby() -> void:
 	var host := "10.0.2.2" if OS.has_feature("android") else "127.0.0.1"
 	_vote_lob.setup(host, MatchConfig.lobby_port)
 	_vote_lob.vote_result.connect(_on_vote_result)
+	_vote_lob.map_vote_result.connect(_on_map_vote_result)
 
 func _cast_vote(mode: String) -> void:
 	if _vote_lob != null and _net_match_id > 0:
 		_vote_lob.vote(_net_match_id, mode)
 
-func _on_vote_result(info: Dictionary) -> void:
-	if _vote_status == null:
-		return
+func _cast_map_vote(map: String) -> void:
+	if _vote_lob != null and _net_match_id > 0:
+		_vote_lob.map_vote(_net_match_id, map)
+
+func _format_vote_status(info: Dictionary, ids: Array, choice_key: String) -> String:
 	if bool(info.get("decided", false)):
-		_vote_status.text = "DECIDED: " + str(info.get("mode", "?")).to_upper() + "  (next match)"
-		_vote_status.modulate = Color(1.0, 0.85, 0.4)
-		return
+		return "DECIDED: " + str(info.get(choice_key, "?")).to_upper() + "  (next match)"
 	var tally: Dictionary = info.get("tally", {})
 	var parts: Array = []
-	for k in ModeRegistry.ids():
+	for k in ids:
 		if tally.has(k):
 			parts.append(str(k).to_upper() + " " + str(int(tally[k])))
 	var txt: String = "  ·  ".join(parts) if parts.size() > 0 else "no votes yet"
 	var ld := str(info.get("leading", ""))
 	if ld != "":
 		txt += "   leading " + ld.to_upper()
-	_vote_status.text = txt
+	return txt
+
+func _on_vote_result(info: Dictionary) -> void:
+	if _vote_status == null:
+		return
+	_vote_status.text = _format_vote_status(info, ModeRegistry.ids(), "mode")
+	if bool(info.get("decided", false)):
+		_vote_status.modulate = Color(1.0, 0.85, 0.4)
+
+func _on_map_vote_result(info: Dictionary) -> void:
+	if _map_vote_status == null:
+		return
+	_map_vote_status.text = _format_vote_status(info, MapRegistry.ids(), "map")
+	if bool(info.get("decided", false)):
+		_map_vote_status.modulate = Color(1.0, 0.85, 0.4)
 
 func _unhandled_input(event: InputEvent) -> void:
 	if _results == null:
@@ -448,6 +502,7 @@ func _exit_to_select() -> void:
 		_vote_lob.queue_free()
 	_vote_lob = null
 	_vote_status = null
+	_map_vote_status = null
 	_net_match_id = 0
 	for n in _match_nodes:
 		if is_instance_valid(n):

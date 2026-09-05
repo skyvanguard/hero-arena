@@ -9,16 +9,23 @@ extends RefCounted
 ##   client -> lobby: ping, join {region, party, skill, name}
 ##   lobby -> client: hello {region, matches, waiters}, pong,
 ##                    queue {stage, waited, open}, assign {host, port, ...}
-##   match -> lobby:  reg {ip, port, region, team_size, name, mode}, state {humans, over}, hb
-##   lobby -> match:  regack {match_id}, setmode {match_id, mode} (D20 vote result)
+##   match -> lobby:  reg {ip, port, region, team_size, name, mode, map},
+##                    state {humans, over, mode, map}, hb
+##   lobby -> match:  regack {match_id}, setmode {match_id, mode} (D20),
+##                    setmap {match_id, map} (D21)
 ##   client -> lobby: vote {match_id, mode} (D20: vote the NEXT match mode;
 ##                    one vote per peer per match, last write wins)
 ##   lobby -> client: voteresult {match_id, tally, leading, decided, mode}
+##   client -> lobby: mapvote {match_id, map} (D21: vote the NEXT match map;
+##                    same rules as vote)
+##   lobby -> client: mapvoteresult {match_id, tally, leading, decided, map}
 ##
-## D20 voting (protocol v1.3): the lobby tallies votes per match; a STRICT
-## MAJORITY with >= 2 votes decides. On decision the lobby updates the
-## directory entry and forwards setmode to the match server; the server
-## applies the voted mode at the next in-place match reset (reset_match).
+## D20/D21 voting (protocol v1.4): the lobby tallies votes per match in two
+## independent domains (mode, map); a STRICT MAJORITY with >= 2 votes
+## decides each domain separately. On decision the lobby updates the
+## directory entry and forwards setmode/setmap to the match server; the
+## server applies the voted mode (pure-data swap) and map (arena rebuild)
+## at the next in-place match reset (reset_match).
 
 const T_PING := "ping"
 const T_PONG := "pong"
@@ -33,6 +40,9 @@ const T_HB := "hb"
 const T_VOTE := "vote"
 const T_VOTERESULT := "voteresult"
 const T_SETMODE := "setmode"
+const T_MAPVOTE := "mapvote"
+const T_MAPVOTERESULT := "mapvoteresult"
+const T_SETMAP := "setmap"
 
 const QUEUE_STAGE_STRICT := 1
 const QUEUE_STAGE_SKILL := 2
