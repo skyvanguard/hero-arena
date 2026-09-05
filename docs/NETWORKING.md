@@ -363,12 +363,13 @@ Dispatch is by first magic byte, channel-independent:
   matched the client count exactly, so the pacing is server-confirmed). This
   is the strongest broadcast-leg evidence available without two physical
   phones; the real-WiFi two-phone sign-off remains the acceptance test.
-- Full battery: 22 headless suites, 378 checks (10 pre-lobby suites at 205 +
+- Full battery: 23 headless suites, 398 checks (10 pre-lobby suites at 205 +
   test_lobby 12 (round 13) + test_net_profiles 30 + test_match_lifecycle 8
   (round 28) + test_relay 7 (round 29) + test_mode_control 15 (round 30) +
   test_mode_capture 17 + test_mode_escort 11 (rounds 31-32) + test_map 12
-  (round 32) + test_results 17 (round 33) + test_vote 13 (round 34)
-  + test_mapvote 12 (round 35) + test_cosmetics 21 (round 36; D22 mastery/variants are client-side - no wire changes). Note: under heavy machine load several net suites flake
+  (round 32) + test_results 18 (round 33; +1 round 36 regression) + test_vote 13
+  (round 34) + test_mapvote 12 (round 35) + test_cosmetics 21 (round 36; D22
+  mastery/variants are client-side - no wire changes). Note: under heavy machine load several net suites flake
   (frame-based waits vs real-time SimLink latency): test_net_profiles
   (proven pre-existing at the pristine round-30 baseline), test_net_sim
   and test_roster (observed once each under a loaded battery; green on
@@ -419,7 +420,7 @@ reliability**:
   RECEIVED time, not the last pong: a stale pong would re-fire the connect
   branch forever (round-13 bug, fixed).
 
-### 9.2 Message types (lobby protocol v1.4, D20/D21 voting)
+### 9.2 Message types (lobby protocol v1.5, D20/D21/D23 voting)
 
 | Type | Dir | Seq | Notes |
 |---|---|---|---|
@@ -431,11 +432,11 @@ reliability**:
 | reg{ip,port,region,team_size,name,mode,map} | s->s | yes | A game server registers its match (published address + mode D18 + map D21) |
 | regack{match_id} | s->s | - | |
 | state{humans,over,mode,map} | s->s | - | Live match state (2 s heartbeat while the server is alive, so the entry survives the 5 s reap during long silent bot-only stretches); mode/map = what the server is actually running, so the directory reflects voted swaps at the next reset; ANY message from a match peer refreshes match liveness |
-| vote{match_id,mode} | c->s | no | D20: vote the match's NEXT mode. Fire-and-forget; one vote per peer per match PER DOMAIN, last write wins (re-taps/retransmits never inflate) |
-| voteresult{match_id,tally,leading,decided,mode} | s->c | - | D20: ack with the running tally; the deciding voter's own ack already shows decided=true |
+| vote{match_id,mode,[party_id,party_size,leader]} | c->s | no | D20: vote the match's NEXT mode. Fire-and-forget; one vote per peer p |er match PER DOMAIN, last write wins (re-taps/retransmits never inflate) |
+| voteresult{match_id,tally,leading,decided,mode,[party_vote]} | s->c | - | D20/D23: ack with the running WEIGHTED tally; the deciding voter's own ack already shows decided=true; party_vote=true acks a non-leader member (no weight added) |
 | setmode{match_id,mode} | s->s | - | D20: a strict majority decided; forwarded to the registered match server, which stores it for the next in-place match reset (a live match never changes rules mid-fight) |
-| mapvote{match_id,map} | c->s | no | D21: vote the match's NEXT map; same rules as vote, independent tally |
-| mapvoteresult{match_id,tally,leading,decided,map} | s->c | - | D21: ack with the running map tally |
+| mapvote{match_id,map,[party_id,party_size,leader]} | c->s | no | D21/D23: vote the match's NEXT map; same rules as vote, independent weighted tally |
+| mapvoteresult{match_id,tally,leading,decided,map,[party_vote]} | s->c | - | D21/D23: ack with the running weighted map tally (party_vote as voteresult) |
 | setmap{match_id,map} | s->s | - | D21: a strict majority decided the map; the server rebuilds the arena (free old geometry, Arena.build) at the next in-place reset |
 
 ### 9.2a Next-match mode + map voting (D20/D21, rounds 34-35)
@@ -450,6 +451,23 @@ reliability**:
   re-votes are idempotent). A decision needs >= 2 votes AND a strict
   majority. Decisions are sticky (first decision wins); re-registration
   (server restart) starts a fresh, empty tally.
+- **D23 weighted tallies (v1.5)**: the tally values are WEIGHTS, not counts.
+  A party speaks through its leader: the leader's vote carries
+  party_size (clamped 1..6) as weight, and non-leader members sending the
+  same party_id with leader=false are acknowledged with party_vote=true and
+  add no weight. A decision now needs a strict weighted majority
+  (winner*2 > total) AND >= 2 voting entities (peers) - a single party,
+  however large, cannot unilaterally decide its own domain, and equal
+  parties (3v3, 2v2) tie and hold. A leader re-vote moves the whole weight
+  (retract with the old weight, add with the new). Party context rides the
+  vote message itself because assigned peers leave the waiter queue, so a
+  per-waiter identity would be lost on assignment. Solo voters (no
+  party_id) keep weight 1: all-solo lobbies behave exactly like v1.4, and
+  v1.4 clients are plain solo voters on a v1.5 lobby (the party fields are
+  optional; old lobbies ignore them). The party group-join handshake (one
+  token for the whole group) and party UI remain v2 - today a party is a
+  convention its members agree on (same party_id), matching the
+  lobby's existing unauthenticated trust model.
 - **Application point**: MatchServer.set_mode_from_lobby() stores
   _pending_mode; reset_match() (the in-place new-match path, triggered by a
   hello after the match is over) assigns the voted Mode resource and runs its
@@ -458,8 +476,9 @@ reliability**:
   server runs it in-place on the next hello (the directory entry - and its
   vote cycle - persists across in-place resets; re-registration starts
   fresh). Decisions are sticky per directory entry.
-- **v1 scope**: mode voting only (the four mode ids). Map voting, in-match
-  (pre-start) application, and per-party vote bundles are v2.
+- **v1 scope**: mode + map voting (D20/D21) with per-party vote bundles
+  (D23). In-match (pre-start) application and the party group-join
+  handshake (+ party UI in hero-select) are v2.
 - **UI**: the results screen (net + lobby matches) shows a
   "NEXT MATCH - VOTE THE MODE" row with four buttons; the voteresult ack
   renders the running tally / leading mode / DECIDED line. The vote lobby
@@ -578,7 +597,9 @@ relay HA / multi-instance (vport space is per-instance), R_REG token auth
 - JSON lines over UDP: human-readable, zero codec deps, plenty for lobby
   traffic; not binary-optimized (fine until thousands of waiters).
 - Party v1: a party only fits a match with room >= party; the party
-  group-join handshake is deferred.
+  group-join handshake is deferred. Voting is party-aware since D23
+  (§9.2a): a party's leader votes with its size as weight, members defer
+  to the leader (party_vote ack).
 - One lobby process per region table; multi-region deployment + redirect is a
   follow-up.
 - Relay v1: one instance per region, no auth token (R_REG token = 0), no
