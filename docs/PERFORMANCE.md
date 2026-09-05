@@ -92,7 +92,7 @@ is not a device signal — see the real-device table below.
 
 | Device | Date | Renderer | FPS (steady) | Worst frame | Notes |
 |---|---|---|---|---|---|
-| _pending_ | — | mobile | — | — | Phase 1 gate: first real low-end Android ≥ 30 FPS |
+| _pending_ | — | mobile | — | — | Phase 6 gate: low-end ≥ 30 / mid ≥ 60 on both maps (no device attached in dev env as of round 39) |
 
 ### 2026-09-04 — dedicated server, 2-core budget (Phase 5, round 27)
 
@@ -113,6 +113,43 @@ Interpretation: the authoritative server clears the 2-core budget with
 >90% headroom at 3v3 scale; 6v6 (2x entities) is the scaling risk to re-
 measure when team-size variety lands. Image: ~119 MB compressed / ~377 MB
 uncompressed (the Godot binary dominates).
+
+### 2026-09-05 — Phase 6 perf pass (round 39)
+
+Workload: 3v3 bot matches (6 entities) on both original maps, current code
+(post-D24).
+
+**Dedicated server, 2-core budget (docker image, --cpuset-cpus="0,1"):**
+
+| Map | Main-thread CPU (live match) | Share of 2-core budget | Memory |
+|---|---|---|---|
+| foundry (stress map) | 0.293 cores (60 s window, /proc utime+stime) | ~15% | 54 MiB flat |
+
+Note on the uncapped-host numbers (1.7-2.2 cores for the same 3v3 match on
+the 80-core dev box): Godot sizes its thread pool to the host core count
+(84 threads observed), and the pool + ENet polling burn mostly kernel time
+there. The cpuset-2 container is the budget-relevant environment (pool = 2);
+0.293 cores keeps >85% headroom on the 2-core budget. Sim pacing was already
+proven at ratio 1.0000 on 2 cores (round 27) and the full match runs to OVER
+with no step drift; the sim <= 8 ms step budget is met at 3v3 scale.
+
+**Client, headless Android emulator (software GL proxy, 1440x720, full FX):**
+
+| Map | FPS (steady) | Worst frame | Notes |
+|---|---|---|---|
+| foundry | 8-9 at launch -> 20 steady | 89 ms (steady state) | launch dip = shader warmup; host under load (avg ~10) |
+| crossdocks | 3-9 at launch -> 16-17 steady | 134 ms (steady state) | launch dip = shader warmup + first respawn VFX burst |
+
+Interpretation: the software rasterizer (Mesa/llvmpipe via ANGLE) is a
+pessimistic proxy, not a device signal. Foundry (the heavier map) at 20 fps
+steady under host load sits inside the Phase 4 crossdocks band (8-25 fps);
+the 30 FPS low-end floor is a real-device number (below).
+
+**Real device (Phase 6 exit gate, round 39 status):** no physical Android
+device is attached in this dev environment (adb lists only the emulator),
+so the device row is measured the moment hardware is available. Everything
+else on the Phase 6 gate list is done: both maps playable, full match flow,
+server budget, demo builds published (docs/BUILD.md).
 
 ## Known environment notes
 
