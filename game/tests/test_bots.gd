@@ -280,10 +280,31 @@ func _test_team_stick() -> void:
 	check("team: stick goal is the in-combat ally",
 		ctl.decision.goal.distance_to(ally.global_position) < 1.0,
 		"goal=%s ally=%s" % [str(ctl.decision.goal), str(ally.global_position)])
-	var start: float = stray.global_position.distance_to(ally.global_position)
-	await frames(40)  # 2.67 sim s (scan finds the target only at ~5.2 s)
-	var end: float = stray.global_position.distance_to(ally.global_position)
-	check("team: stick closes distance to squad", end < start - 4.0, "start=%.1f end=%.1f" % [start, end])
+	# Measure the STRAY's walk toward the squad while it is still in REGROUP.
+	# Two confounds made the old "closes live distance" check flaky (~40% of
+	# runs): (1) the ally is in combat and drifts toward the dummy while the
+	# stray approaches, so the closing distance is confounded by the ally's
+	# own movement; (2) the stray's scan sweep is stochastic and can find the
+	# target earlier than the assumed ~5.2 s, flipping the intent to ATTACK
+	# mid-window (observed: the stray walking at full speed toward the
+	# target). The REGROUP intent + goal checks above pin the decision; this
+	# pins the locomotion, tolerating an engagement flip that happens AFTER
+	# the stray has already walked 4 m toward the squad.
+	var stray_start: Vector3 = stray.global_position
+	var ally_cap: Vector3 = ally.global_position
+	var to_squad := (ally_cap - stray_start).normalized()
+	var max_close := 0.0  # max toward-squad progress while intent == REGROUP
+	var waited := 0
+	while waited < 240 and max_close < 4.0:
+		await frames(5)  # 0.083 sim s steps, up to 4 sim s
+		waited += 5
+		if ctl.decision.intent != BotDecision.Intent.REGROUP:
+			break
+		var prog: float = (stray.global_position - stray_start).dot(to_squad)
+		if prog > max_close:
+			max_close = prog
+	check("team: stick walks toward the squad (while REGROUP)", max_close > 4.0,
+			"close=%.1f m (intent left REGROUP at %d frames)" % [max_close, waited])
 func _test_match_end() -> void:
 	# TDM end condition (directive: 3-8 min matches): score cap and time cap.
 	# (No lambda listeners: GDScript captures local vars by value.)
