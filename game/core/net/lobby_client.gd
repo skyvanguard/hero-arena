@@ -99,15 +99,31 @@ func send_state(humans: int, over: bool, mode := "", map := "") -> void:
 	_put({t = LobbyProtocol.T_STATE, humans = humans, over = over,
 			mode = mode, map = map})
 
-## D20: vote a match's next mode (one vote per client, last write wins).
-## Fire-and-forget: a lost vote simply isn't counted - the player can
-## re-tap; the lobby dedupes by peer, never by seq.
-func vote(match_id: int, mode: String) -> void:
-	_put({t = LobbyProtocol.T_VOTE, match_id = match_id, mode = mode})
+## D20/D23: vote a match's next mode (one vote per client, last write
+## wins). Fire-and-forget: a lost vote simply isn't counted - the player
+## can re-tap; the lobby dedupes by peer, never by seq. Party bundle
+## (D23): a party LEADER passes party_id + party_size and the vote
+## carries that weight; members pass the same party_id with leader=false
+## and are acknowledged without adding weight (the party speaks through
+## its leader). Defaults = solo (wire-compatible with v1).
+func vote(match_id: int, mode: String, party_id := "", party_size := 1,
+		leader := false) -> void:
+	var m := {t = LobbyProtocol.T_VOTE, match_id = match_id, mode = mode}
+	if party_id != "":
+		m.party_id = party_id
+		m.party_size = clampi(party_size, 1, 6)
+		m.leader = leader
+	_put(m)
 
-## D21: vote a match's next map (same rules as vote()).
-func map_vote(match_id: int, map: String) -> void:
-	_put({t = LobbyProtocol.T_MAPVOTE, match_id = match_id, map = map})
+## D21/D23: vote a match's next map (same rules as vote()).
+func map_vote(match_id: int, map: String, party_id := "", party_size := 1,
+		leader := false) -> void:
+	var m := {t = LobbyProtocol.T_MAPVOTE, match_id = match_id, map = map}
+	if party_id != "":
+		m.party_id = party_id
+		m.party_size = clampi(party_size, 1, 6)
+		m.leader = leader
+	_put(m)
 
 func ping() -> void:
 	_seq_ping += 1

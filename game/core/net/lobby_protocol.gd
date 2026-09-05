@@ -13,19 +13,33 @@ extends RefCounted
 ##                    state {humans, over, mode, map}, hb
 ##   lobby -> match:  regack {match_id}, setmode {match_id, mode} (D20),
 ##                    setmap {match_id, map} (D21)
-##   client -> lobby: vote {match_id, mode} (D20: vote the NEXT match mode;
-##                    one vote per peer per match, last write wins)
-##   lobby -> client: voteresult {match_id, tally, leading, decided, mode}
-##   client -> lobby: mapvote {match_id, map} (D21: vote the NEXT match map;
-##                    same rules as vote)
-##   lobby -> client: mapvoteresult {match_id, tally, leading, decided, map}
+##   client -> lobby: vote {match_id, mode, [party_id, party_size, leader]}
+##                    (D20: vote the NEXT match mode; one vote per peer per
+##                    match, last write wins; D23: optional party bundle -
+##                    the party LEADER's vote carries party_size weight,
+##                    members are acked with party_vote=true and add none)
+##   lobby -> client: voteresult {match_id, tally, leading, decided, mode,
+##                    [party_vote]}  (tally values are WEIGHTED counts)
+##   client -> lobby: mapvote {match_id, map, [party_id, party_size, leader]}
+##                    (D21: vote the NEXT match map; same rules as vote)
+##   lobby -> client: mapvoteresult {match_id, tally, leading, decided, map,
+##                    [party_vote]}
 ##
-## D20/D21 voting (protocol v1.4): the lobby tallies votes per match in two
-## independent domains (mode, map); a STRICT MAJORITY with >= 2 votes
-## decides each domain separately. On decision the lobby updates the
-## directory entry and forwards setmode/setmap to the match server; the
-## server applies the voted mode (pure-data swap) and map (arena rebuild)
-## at the next in-place match reset (reset_match).
+## D20/D21/D23 voting (protocol v1.5): the lobby tallies votes per match in
+## two independent domains (mode, map); a STRICT WEIGHTED MAJORITY (winner*2
+## > total) decides each domain separately, and a decision additionally
+## needs TWO voting entities (peers) - a single party, however large,
+## cannot unilaterally decide its own domain, and equal parties (3v3, 2v2)
+## tie and hold. D23: a
+## party speaks through its leader - the leader's vote carries the
+## declared party size (clamped 1..6); non-leader members pass the same
+## party_id with leader=false and are acknowledged without adding weight. Solo
+## voters (no party_id) keep weight 1, so all-solo lobbies behave
+## exactly like v1.4 (and v1.4 clients are solo voters on a v1.5 lobby).
+## On decision the lobby updates the directory entry and forwards
+## setmode/setmap to the match server; the server applies the voted mode
+## (pure-data swap) and map (arena rebuild) at the next in-place match
+## reset (reset_match).
 
 const T_PING := "ping"
 const T_PONG := "pong"

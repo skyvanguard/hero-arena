@@ -180,9 +180,11 @@ func _dispatch(key: String, msg: Dictionary) -> void:
 				last_seen = time,
 				votes = {},
 				vote_source = {},
+				vote_weight = {},
 				decided = false,
 				map_votes = {},
 				map_vote_source = {},
+				map_vote_weight = {},
 				map_decided = false,
 			}
 			_send(key, {t = LobbyProtocol.T_REGACK, match_id = id})
@@ -215,11 +217,17 @@ func _dispatch(key: String, msg: Dictionary) -> void:
 	if mid2 != 0:
 		matches[mid2].last_seen = time
 
-## D20/D21 vote: one vote per peer per match PER DOMAIN (mode and map are
-## independent tallies), last write wins (a re-tap or a retransmit never
-## inflates the tally). Strict majority with >= 2 votes decides each domain
-## separately; the decision updates the directory entry and is forwarded to
-## the match server, which applies it at the next in-place reset.
+## D20/D21/D23 vote: one vote per peer per match PER DOMAIN (mode and map
+## are independent tallies), last write wins (a re-tap or a retransmit never
+## inflates the tally). D23: tallies are WEIGHTED - a party's leader casts
+## the party vote and it carries the declared party size (clamped 1..6);
+## non-leader members of a party are acknowledged with party_vote=true and
+## do not add weight (the party speaks through its leader). A party that
+## self-decide; equal parties tie. Decision = strict weighted majority
+## (winner*2 > total) AND >= 2 voting entities. Solo voters (no party_id)
+## keep weight 1, so an all-solo lobby behaves exactly like v1. The decision updates the
+## directory entry and is forwarded to the match server, which applies it
+## at the next in-place reset.
 func _on_vote(key: String, msg: Dictionary, kind: String = "mode") -> void:
 	var mid := int(msg.get("match_id", 0))
 	var m: Dictionary = matches.get(mid, {})
@@ -235,13 +243,35 @@ func _on_vote(key: String, msg: Dictionary, kind: String = "mode") -> void:
 		return
 	var tally: Dictionary = m.votes if kind == "mode" else m.map_votes
 	var source: Dictionary = m.vote_source if kind == "mode" else m.map_vote_source
-	# Last write wins: retract the previous vote (if any) before counting
-	# the new one - a same-choice re-vote is idempotent (net zero).
+	var weight_map: Dictionary = m.vote_weight if kind == "mode" else m.map_vote_weight
+	var party_id := str(msg.get("party_id", ""))
+	var is_leader := bool(msg.get("leader", false))
+	var weight := 1
+	if party_id != "" and is_leader:
+		weight = clampi(int(msg.get("party_size", 1)), 1, 6)
+	elif party_id != "":
+		# A non-leader member: the party speaks through its leader. Ack
+		# (not err - the message was well-formed) so the client can show a
+		# "waiting for the party leader" state.
+		var resp_pm := {
+			t = LobbyProtocol.T_VOTERESULT if kind == "mode" else LobbyProtocol.T_MAPVOTERESULT,
+			match_id = mid,
+			tally = tally.duplicate(true), leading = _leading(m, kind),
+			decided = bool(m.decided if kind == "mode" else m.map_decided),
+			party_vote = true,
+		}
+		resp_pm[kind] = str(m.mode if kind == "mode" else m.map)
+		_send(key, resp_pm)
+		return
+	# Last write wins: retract the previous vote (if any) with its own
+	# weight before counting the new one - a same-choice re-vote is
+	# idempotent (net zero).
 	var prev := str(source.get(key, ""))
 	if prev != "":
-		tally[prev] = int(tally[prev]) - 1
+		tally[prev] = int(tally[prev]) - int(weight_map.get(key, 1))
 	source[key] = opt
-	tally[opt] = int(tally.get(opt, 0)) + 1
+	weight_map[key] = weight
+	tally[opt] = int(tally.get(opt, 0)) + weight
 	# Decide BEFORE acking: the voter who casts the deciding vote sees
 	# decided=true in the very response that caused it.
 	_try_decide(int(mid), m, kind)
@@ -268,14 +298,20 @@ func _try_decide(mid: int, m: Dictionary, kind: String = "mode") -> void:
 	if bool(m.decided if kind == "mode" else m.map_decided):
 		return
 	var tally: Dictionary = m.votes if kind == "mode" else m.map_votes
+	var source: Dictionary = m.vote_source if kind == "mode" else m.map_vote_source
 	var total := 0
 	for v in tally.values():
 		total += int(v)
-	if total < 2:
+	# D23: total is the WEIGHTED vote count (party leaders carry their
+	# party size). All-solo lobbies behave exactly like v1. A decision also
+	# needs TWO voting entities (peers): a single party - however large -
+	# cannot unilaterally decide its own domain, and equal parties (3v3,
+	# 2v2) tie and hold.
+	if source.size() < 2 or total < 2:
 		return
 	var winner := _leading(m, kind)
 	if winner == "" or int(tally[winner]) * 2 <= total:
-		return  # no strict majority
+		return  # no strict weighted majority
 	if kind == "mode":
 		m.decided = true
 		m.mode = winner
@@ -286,7 +322,7 @@ func _try_decide(mid: int, m: Dictionary, kind: String = "mode") -> void:
 	var fmsg := {t = st, match_id = mid}
 	fmsg[kind] = winner
 	_send(str(m.key), fmsg)
-	print("LOBBY match %d %s voted: %s (%d/%d votes)" % [
+	print("LOBBY match %d %s voted: %s (%d/%d weighted votes)" % [
 			mid, kind, winner, int(tally[winner]), total])
 
 func _match_id_of(key: String) -> int:
