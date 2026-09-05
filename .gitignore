@@ -1,7 +1,6 @@
 # Godot
 game/.godot/
-game/export_presets.cfg
-game/build/
+game/build/*
 *.tmp
 
 # Builds & artifacts
@@ -18,3 +17,4 @@ server/out/
 
 # Node (tooling, if any)
 node_modules/
+!game/build/keys/

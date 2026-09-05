@@ -8,11 +8,35 @@ A spiritual successor to *T3 Arena* — not a clone: the fast, readable, small-t
 
 ## Status
 
-**Phase 0 — Research & Architecture** (2026-09-02)
+**Phase 6 in progress** (2026-09-05) — the first complete match is on device:
+3v3 (1v1–6v6 by config) across four modes (TDM / Control / Capture / Escort) on two
+original maps, six original heroes, four bot difficulties offline and as queue fill,
+lobby + party-aware matchmaking with bot fill, authoritative dedicated server,
+results + progression v1, mode & map voting, cosmetics/mastery display, and
+customizable mobile controls. See [docs/ROADMAP.md](docs/ROADMAP.md) for the
+phase-by-phase status.
 
 - Research complete: T3 Arena, Overwatch, open-source landscape, engine evaluation
 - Engine decided: **Godot 4.7.x** (MIT) — see docs/ENGINE_DECISION.md
-- Next: Phase 1 vertical slice (Android + map + character + camera + touch + weapon + damage + death/respawn + 1 bot)
+
+## Play it
+
+- **Android:** [APK on the Releases page](https://github.com/skyvanguard/hero-arena/releases)
+  (allow installing unknown apps). Offline bots and the practice range work with
+  no server; online play needs a lobby + server (below).
+- **Desktop (Linux x86_64):** [heroarena.x86_64.x86_64 on the Releases page](https://github.com/skyvanguard/hero-arena/releases)
+  (chmod +x, run with the .pck file beside it).
+- **Run a server yourself (LAN):** docker run -p 7777:7777/udp -p 7778:7778/udp
+  heroarena/server — then join from the hero-select JOIN field (host:port), or
+  point a lobby at it. See [docs/NETWORKING.md](docs/NETWORKING.md).
+
+## Reporting problems
+
+Use the [issue tracker](https://github.com/skyvanguard/hero-arena/issues) — bug
+reports and feature ideas both welcome (templates included).
+
+## Phase 0 notes (2026-09-02)
+
 
 ## Core promises (the product principles)
 
