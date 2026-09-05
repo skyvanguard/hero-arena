@@ -31,9 +31,13 @@ var _lob_in_queue := false
 ## XP/level config so the badge shows level/XP/matches/wins).
 var profile: PlayerProfile = null
 var progression: ProgressionConfig = null
+## D22: cosmetic variant bank (data) + the per-card variant dot states.
+var _bank: HeroVariantBank = null
+var _variant_dots: Array = []
 
 func _ready() -> void:
 	_hero = HeroRegistry.default_hero()
+	_bank = HeroVariantBank.load_bank()
 	_build()
 
 func _select(hd: HeroData) -> void:
@@ -42,6 +46,82 @@ func _select(hd: HeroData) -> void:
 	_hero = hd
 	for c in _cards:
 		c.control.queue_redraw()
+
+func _cards_meta_swatch(idx: int, swatch: ColorRect) -> void:
+	if idx < _cards.size():
+		_cards[idx].swatch = swatch
+
+## D22: one tap-dot per cosmetic variant (data: palette + mastery unlock).
+## Unlocked dots are tappable; locked ones are dimmed and inert.
+func _add_variant_strip(card: Control, hd: HeroData, pos: Vector2,
+		card_w: float) -> void:
+	var s: HeroVariantSet = _bank.set_for(hd.id) if _bank != null else null
+	if s == null:
+		return
+	var n := s.palette.size()
+	if n == 0:
+		return
+	var dot_w := 18.0
+	var gap := 4.0
+	var total := float(n) * dot_w + float(n - 1) * gap
+	var x0: float = (card_w - total) * 0.5
+	for i in n:
+		var dot := Control.new()
+		dot.position = pos + Vector2(x0 + float(i) * (dot_w + gap), 0)
+		dot.size = Vector2(dot_w, 12)
+		dot.mouse_filter = Control.MOUSE_FILTER_STOP
+		var st := {hero = hd, idx = i, unlocked = true, selected = false}
+		var ss := s
+		dot.draw.connect(func() -> void: _draw_dot(dot, st, ss))
+		dot.gui_input.connect(func(ev: InputEvent) -> void:
+			if (ev is InputEventScreenTouch and ev.pressed) or (ev is InputEventMouseButton and ev.pressed):
+				_on_variant_tap(hd, i)
+		)
+		_refresh_dot_state(st, ss, hd)
+		card.add_child(dot)
+		_variant_dots.append({ctrl = dot, st = st, set = ss, hero = hd})
+
+func _draw_dot(dot: Control, st: Dictionary, s: HeroVariantSet) -> void:
+	var col: Color = s.color_of(int(st.idx), Color.WHITE)
+	if not bool(st.unlocked):
+		col = col.darkened(0.65)
+	dot.draw_rect(Rect2(Vector2.ZERO, dot.size), col)
+	if bool(st.selected):
+		dot.draw_rect(Rect2(Vector2.ZERO, dot.size), Color.WHITE, false, 2.0)
+	elif not bool(st.unlocked):
+		dot.draw_rect(Rect2(Vector2.ZERO, dot.size), Color(1.0, 1.0, 1.0, 0.25),
+				false, 1.0)
+
+func _refresh_dot_state(st: Dictionary, s: HeroVariantSet, hd: HeroData) -> void:
+	var lvl := 0
+	if profile != null and progression != null:
+		lvl = profile.mastery_level_of(progression, hd.id)
+	var need := 0
+	if int(st.idx) < s.unlock_levels.size():
+		need = int(s.unlock_levels[int(st.idx)])
+	st.unlocked = lvl >= need
+	st.selected = (profile != null and profile.selected_variant(hd.id) == int(st.idx)) \
+			or (profile == null and int(st.idx) == 0)
+
+func _on_variant_tap(hd: HeroData, idx: int) -> void:
+	if profile == null or progression == null or _bank == null:
+		return
+	var s: HeroVariantSet = _bank.set_for(hd.id)
+	if s == null:
+		return
+	var need := 0
+	if idx < s.unlock_levels.size():
+		need = int(s.unlock_levels[idx])
+	if profile.mastery_level_of(progression, hd.id) < need:
+		return  # locked: needs more mastery
+	profile.set_variant(hd.id, idx)
+	for d in _variant_dots:
+		if d.hero == hd:
+			_refresh_dot_state(d.st, d.set, hd)
+			d.ctrl.queue_redraw()
+	for c in _cards:
+		if c.data == hd:
+			c.swatch.color = HeroVariantBank.color_for(_bank, profile, hd.id, hd.color)
 
 func _process(_delta: float) -> void:
 	# Pump the LAN discovery scanner while a scan is in flight.
@@ -113,14 +193,17 @@ func _build() -> void:
 		_cards.append({control = card, data = hd})
 
 		var ic := ColorRect.new()
-		ic.color = hd.color
-		ic.position = Vector2((card_w - 120.0) * 0.5, 20)
+		# D22: the card preview shows the player's SELECTED variant color
+		# (mastery-unlocked cosmetics; profile may be null in tests).
+		ic.color = HeroVariantBank.color_for(_bank, profile, hd.id, hd.color)
+		ic.position = Vector2((card_w - 120.0) * 0.5, 14)
 		ic.size = Vector2(120, 90)
 		card.add_child(ic)
+		_cards_meta_swatch(i, ic)
 
 		var nm := Label.new()
 		nm.text = hd.display_name
-		nm.position = Vector2(4, 120)
+		nm.position = Vector2(4, 126)
 		nm.size = Vector2(card_w - 8.0, 30)
 		nm.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		nm.add_theme_font_size_override("font_size", 24)
@@ -128,7 +211,7 @@ func _build() -> void:
 
 		var role := Label.new()
 		role.text = _role_text(hd)
-		role.position = Vector2(4, 152)
+		role.position = Vector2(4, 158)
 		role.size = Vector2(card_w - 8.0, 20)
 		role.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		role.add_theme_font_size_override("font_size", 14)
@@ -137,11 +220,15 @@ func _build() -> void:
 
 		var kit := Label.new()
 		kit.text = _kit_text(hd)
-		kit.position = Vector2(4, 178)
+		if profile != null and progression != null:
+			kit.text += "\nMASTERY LV " + str(profile.mastery_level_of(progression, hd.id))
+		kit.position = Vector2(4, 180)
 		kit.size = Vector2(card_w - 8.0, 92)
 		kit.add_theme_font_size_override("font_size", 12)
 		kit.modulate = Color(0.65, 0.7, 0.8)
 		card.add_child(kit)
+
+		_add_variant_strip(card, hd, Vector2(0, 108), card_w)
 		i += 1
 
 	var hint := Label.new()

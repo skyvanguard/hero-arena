@@ -24,6 +24,8 @@ var _in_range := false
 var profile: PlayerProfile = null
 var progression: ProgressionConfig = null
 var _my_hero_id := ""
+var _net_hero_id := ""
+var _bank: HeroVariantBank = null  # D22 cosmetic variants (data)
 ## Everything _start_match/_start_range add to the tree, so the match can be
 ## torn down cleanly when it ends (results overlay -> hero select).
 var _match_nodes: Array = []
@@ -33,6 +35,7 @@ func _ready() -> void:
 	randomize()
 	progression = load("res://content/progression.tres") as ProgressionConfig
 	profile = PlayerProfile.load(progression)
+	_bank = HeroVariantBank.load_bank()
 	if DisplayServer.get_name() == "headless":
 		_start_match(HeroRegistry.default_hero())
 		return
@@ -49,6 +52,7 @@ func _on_net_deploy(host_port: String, hero_data: HeroData, match_id: int) -> vo
 	# tracks teardown + the results overlay. match_id (D20) identifies the
 	# lobby entry for the next-match mode vote.
 	_net_match_id = match_id
+	_net_hero_id = hero_data.id
 	if _hero_select != null:
 		_hero_select.queue_free()
 		_hero_select = null
@@ -56,24 +60,34 @@ func _on_net_deploy(host_port: String, hero_data: HeroData, match_id: int) -> vo
 	add_child(_net_client)
 	_match_nodes.append(_net_client)
 	_net_client.ended.connect(_on_net_ended)
-	_net_client.setup(host_port, hero_data)
+	# D22: the player's character wears the mastery-selected variant color
+	# (client-side only; the server never reads the profile).
+	var pcolor: Color = HeroVariantBank.color_for(_bank, profile, hero_data.id,
+			hero_data.color)
+	_net_client.setup(host_port, hero_data, pcolor)
 
 func _on_net_ended(winner: int, score: Array, wtime: float, lost: bool,
 		title: String, stats: Array) -> void:
 	# Net titles are computed by the client from my_team (offline is always
 	# team 0 and may still rely on the _show_results fallback).
-	var info := {"stats": stats}
+	var info := {"stats": stats, "hero_id": _net_hero_id}
+	# My stats row index: my_id is the match character id (monotonic, NOT a
+	# row index - see MatchClient._char_order); the snapshot order IS the
+	# M_STATS row order.
+	var my_idx := -1
+	if _net_client != null:
+		my_idx = _net_client.stats_index_of(_net_client.my_id)
 	info["names"] = []
 	for i in stats.size():
 		var nm := ""
 		if _net_client != null and _net_client._views.has(int(i)):
 			nm = _net_client._views[int(i)].display_name
-		info["names"].append(nm + ("  (you)" if i == _net_client.my_id else ""))
+		info["names"].append(nm + ("  (you)" if i == my_idx else ""))
 	var mvp: int = World.mvp_index(stats)
-	if _net_client != null and _net_client.my_id >= 0 and stats.size() > _net_client.my_id:
-		var row: Array = stats[_net_client.my_id]
+	if my_idx >= 0 and stats.size() > my_idx:
+		var row: Array = stats[my_idx]
 		info["level"] = profile.apply_match(progression, _net_client.my_hero_id,
-				winner == _net_client.my_team, int(row[1]), mvp == _net_client.my_id)
+				winner == _net_client.my_team, int(row[1]), mvp == my_idx)
 	var ids_m: Array = ModeRegistry.ids()
 	var ids_map: Array = MapRegistry.ids()
 	var mc: int = _net_client._mode_code if _net_client != null else 0
@@ -126,8 +140,10 @@ func _start_match(hero_data: HeroData) -> void:
 	var team0: Array = world.spawn_points.get(0, [])
 	var team1: Array = world.spawn_points.get(1, [])
 
-	# Player on our first spawn.
-	player = HeroFactory.create(0, true, hero_data.color, hero_data)
+	# Player on our first spawn (D22: mastery-selected variant color).
+	player = HeroFactory.create(0, true,
+			HeroVariantBank.color_for(_bank, profile, hero_data.id, hero_data.color),
+			hero_data)
 	if team0.size() > 0:
 		player.position = team0[0]
 	add_child(player)
@@ -222,7 +238,7 @@ func _on_world_event(name: String, data: Dictionary) -> void:
 	for i in stats.size():
 		var c: CharacterEntity = world.characters[i]
 		names.append(c.display_name + ("  (you)" if i == my_idx else ""))
-	var info := {"stats": stats, "names": names}
+	var info := {"stats": stats, "names": names, "hero_id": _my_hero_id}
 	var mvp: int = World.mvp_index(stats)
 	if my_idx >= 0:
 		var row: Array = stats[my_idx]
@@ -346,6 +362,28 @@ func _show_results(winner: int, score: Array, wtime: float, title_override := ""
 		xl.modulate = Color(0.75, 1.0, 0.75)
 		_results.add_child(xl)
 		y += 34.0
+	# D22 per-hero mastery line (cosmetic progression for THIS hero).
+	var hid: String = str(info.get("hero_id", ""))
+	if hid != "" and profile != null and progression != null:
+		var mp: Dictionary = profile.mastery_progress_of(progression, hid)
+		var hdn: HeroVariantSet = _bank.set_for(hid) if _bank != null else null
+		var hdname := hid.to_upper()
+		if hdn != null and _bank != null:
+			for h in HeroRegistry.HEROES:
+				if h is HeroData and str(h.id) == hid:
+					hdname = str(h.display_name).to_upper()
+					break
+		var ml := Label.new()
+		ml.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		ml.text = "%s  MASTERY LV %d  (%.0f/%.0f)" % [
+				hdname, int(mp.level), float(mp.xp_into), float(mp.need)]
+		ml.position = Vector2(vp.x * 0.5 - 200, y + 2)
+		ml.size = Vector2(400, 22)
+		ml.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		ml.add_theme_font_size_override("font_size", 16)
+		ml.modulate = Color(0.7, 0.78, 0.95)
+		_results.add_child(ml)
+		y += 28.0
 	# Next-match mode vote (D20, net + lobby only): four mode buttons; the
 	# lobby tallies (one vote per peer, last write wins) and a strict
 	# majority decides - the match server applies it at the next reset.
@@ -529,7 +567,9 @@ func _start_range(hero_data: HeroData) -> void:
 	var range_root := PracticeRange.build(world)
 	add_child(range_root)
 
-	player = HeroFactory.create(0, true, hero_data.color, hero_data)
+	player = HeroFactory.create(0, true,
+			HeroVariantBank.color_for(_bank, profile, hero_data.id, hero_data.color),
+			hero_data)
 	player.position = PracticeRange.PLAYER_SPAWN
 	player.rotation.y = 0.0
 	player.set_aim_pitch(PracticeRange.initial_aim_pitch())

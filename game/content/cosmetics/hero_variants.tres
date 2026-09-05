@@ -1,0 +1,44 @@
+[gd_resource type="Resource" script_class="HeroVariantBank" load_steps=8 format=3]
+
+[ext_resource type="Script" path="res://core/cosmetics/hero_variant_bank.gd" id="1_bank"]
+[ext_resource type="Script" path="res://core/cosmetics/hero_variant_set.gd" id="2_set"]
+
+[sub_resource type="Resource" id="set_kestrel"]
+script = ExtResource("2_set")
+hero_id = "kestrel"
+palette = [Color(0.35, 0.62, 0.95, 1), Color(0.62, 0.82, 1, 1), Color(0.16, 0.3, 0.66, 1), Color(0.5, 0.88, 0.94, 1), Color(0.58, 0.62, 0.72, 1)]
+unlock_levels = [0, 2, 4, 6, 8]
+
+[sub_resource type="Resource" id="set_blitz"]
+script = ExtResource("2_set")
+hero_id = "blitz"
+palette = [Color(0.95, 0.72, 0.2, 1), Color(1, 0.8, 0.35, 1), Color(0.82, 0.34, 0.12, 1), Color(0.92, 0.82, 0.55, 1), Color(0.72, 0.42, 0.26, 1)]
+unlock_levels = [0, 2, 4, 6, 8]
+
+[sub_resource type="Resource" id="set_bastion"]
+script = ExtResource("2_set")
+hero_id = "bastion"
+palette = [Color(0.85, 0.4, 0.25, 1), Color(0.92, 0.16, 0.22, 1), Color(0.52, 0.12, 0.18, 1), Color(0.9, 0.44, 0.52, 1), Color(0.62, 0.36, 0.32, 1)]
+unlock_levels = [0, 2, 4, 6, 8]
+
+[sub_resource type="Resource" id="set_mira"]
+script = ExtResource("2_set")
+hero_id = "mira"
+palette = [Color(0.25, 0.8, 0.7, 1), Color(0.42, 0.95, 0.9, 1), Color(0.16, 0.66, 0.42, 1), Color(0.62, 0.95, 0.76, 1), Color(0.12, 0.52, 0.58, 1)]
+unlock_levels = [0, 2, 4, 6, 8]
+
+[sub_resource type="Resource" id="set_nimbus"]
+script = ExtResource("2_set")
+hero_id = "nimbus"
+palette = [Color(0.65, 0.45, 0.9, 1), Color(0.72, 0.32, 0.96, 1), Color(0.46, 0.22, 0.52, 1), Color(0.76, 0.62, 0.96, 1), Color(0.36, 0.26, 0.62, 1)]
+unlock_levels = [0, 2, 4, 6, 8]
+
+[sub_resource type="Resource" id="set_patch"]
+script = ExtResource("2_set")
+hero_id = "patch"
+palette = [Color(0.55, 0.75, 0.3, 1), Color(0.72, 0.95, 0.32, 1), Color(0.32, 0.56, 0.22, 1), Color(0.56, 0.6, 0.32, 1), Color(0.42, 0.9, 0.42, 1)]
+unlock_levels = [0, 2, 4, 6, 8]
+
+[resource]
+script = ExtResource("1_bank")
+sets = [SubResource("set_kestrel"), SubResource("set_blitz"), SubResource("set_bastion"), SubResource("set_mira"), SubResource("set_nimbus"), SubResource("set_patch")]

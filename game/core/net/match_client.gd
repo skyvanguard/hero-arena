@@ -23,6 +23,15 @@ var hud: NetHUD
 var sim_out: SimLink = null
 var sim_in: SimLink = null
 var _hero_data: HeroData
+var _player_color := Color.WHITE  # D22: mastery-selected variant (client-side only)
+## Character ids in SNAPSHOT order (= world.characters order = M_STATS row
+## order). Match ids are 0-based but monotonically assigned (bot-only fills
+## take 0..N-1, a joining human gets the next free id, freed bots' ids are
+## never reused) - so my_id is NOT a stats row index; this order is.
+var _char_order: Array = []
+
+func stats_index_of(ch_id: int) -> int:
+	return _char_order.find(ch_id)
 var _host := ""
 var _port := 7777
 var _in_match := false
@@ -68,8 +77,12 @@ var _p_in: NetInput = null
 var _pred_acc := 0.0
 var _pred_dead := true
 
-func setup(host_port: String, hero_data: HeroData) -> void:
+func setup(host_port: String, hero_data: HeroData,
+		player_color: Color = Color.WHITE) -> void:
 	_hero_data = hero_data
+	# D22 cosmetic: the player's predicted character wears the mastery-
+	# selected variant color (Color.WHITE = caller had no bank -> default).
+	_player_color = player_color
 	var parts: PackedStringArray = host_port.strip_edges().split(":")
 	_host = parts[0] if parts.size() > 0 else "127.0.0.1"
 	_port = int(parts[1]) if parts.size() > 1 else 7777
@@ -377,6 +390,9 @@ func _on_event(d: Dictionary) -> void:
 					"" if w == -1 else ("DEFEAT" if lost else "VICTORY"))
 
 func _on_snapshot(d: Dictionary) -> void:
+	_char_order = []
+	for c in d.chars:
+		_char_order.append(int(c.id))
 	_ring.append(d)
 	_ring_times.append(float(d.time))
 	if _ring.size() > 4:
@@ -461,7 +477,8 @@ func _reconcile(d: Dictionary) -> void:
 ## loopback the twin shares the process physics space with the server world;
 ## a stray head-sensor would block server LOS/weapon rays again).
 func _ensure_predicted(c: Dictionary) -> void:
-	_pch = HeroFactory.create(my_team, false, _hero_data.color, _hero_data)
+	var pc: Color = _player_color if _player_color != Color.WHITE else _hero_data.color
+	_pch = HeroFactory.create(my_team, false, pc, _hero_data)
 	_pch.display_name = "You"
 	_pch.collision_layer = 0
 	var stack: Array = [_pch]
