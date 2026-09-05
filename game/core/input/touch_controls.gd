@@ -56,6 +56,10 @@ func build() -> void:
 	_joy_root.offset_right = vp.x * float(eff.aim_zone_split)
 	_joy_root.mouse_filter = Control.MOUSE_FILTER_STOP
 	_joy_root.gui_input.connect(_on_joy_input)
+	# Persistent draw connection (a CONNECT_ONE_SHOT reconnected per
+	# queue_redraw can fire after the draw pass has closed - draw calls
+	# outside the pass are engine errors).
+	_joy_root.draw.connect(_draw_joy)
 	add_child(_joy_root)
 	# Buttons from the resolved layout.
 	for b in eff.buttons:
@@ -154,10 +158,14 @@ func _on_joy_input(event: InputEvent) -> void:
 func queue_redraw_zone() -> void:
 	if _joy_root != null:
 		_joy_root.queue_redraw()
-		_joy_root.draw.connect(func() -> void: _draw_joy(), CONNECT_ONE_SHOT)
 
 func _draw_joy() -> void:
 	if _joy_id == -1:
+		return
+	# Headless has no canvas: a queued redraw still flushes the signal, but
+	# draw calls outside a real draw pass are engine errors there (and the
+	# joystick is never visible in headless anyway).
+	if DisplayServer.get_name() == "headless":
 		return
 	_joy_root.draw_circle(_joy_center, float(eff.joy_radius), Color(1, 1, 1, 0.12))
 	_joy_root.draw_circle(_joy_center + _joy_vec, float(eff.joy_radius) * 0.38,
