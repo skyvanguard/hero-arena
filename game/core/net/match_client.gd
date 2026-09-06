@@ -67,6 +67,12 @@ var _token := 0
 var _reconnects := 0
 var _reconnecting := false
 var _reconnect_acc := 0.0
+# D30 re-hello watchdog: a slot reply lost on a lossy link is never
+# retransmitted - re-send the hello so the server re-announces the slot.
+const REHELLO_TIMEOUT := 2.0
+const MAX_REHELLOS := 4
+var _hello_acc := 0.0
+var _rehellos := 0
 # Client prediction (local player): a private World steps a twin character
 # through NetPlayerController (same interface as the server-side humans) so
 # the view is driven by prediction, not interpolation.
@@ -121,6 +127,8 @@ func _on_connected() -> void:
 	print("CLIENT connected to %s:%d" % [_host, _port])
 	var buf := NetProtocol.pack_hello(MatchConfig.team_size, _hero_data.id, _token)
 	_tx(0, buf, MultiplayerPeer.TRANSFER_MODE_RELIABLE, NetProtocol.CH_RELIABLE)
+	_hello_acc = 0.0
+	_rehellos = 0
 
 func _on_conn_failed() -> void:
 	if _ended:
@@ -178,6 +186,21 @@ func _process(delta: float) -> void:
 		if _reconnect_acc >= 0.5:
 			_reconnect_acc = 0.0
 			_do_reconnect()
+	# D30 re-hello watchdog: if the slot never confirms within
+	# REHELLO_TIMEOUT (the reply was lost on a lossy link), re-send the hello
+	# with the same token; the server's idempotent re-hello re-announces the
+	# slot (or completes a fresh join). Bounded - the transport watchdog
+	# owns a dead server.
+	if my_id < 0 and not _reconnecting and not _ended \
+				and _rehellos < MAX_REHELLOS and _hero_data != null:
+		_hello_acc += delta
+		if _hello_acc >= REHELLO_TIMEOUT:
+			_hello_acc = 0.0
+			_rehellos += 1
+			_tx(0, NetProtocol.pack_hello(MatchConfig.team_size,
+					_hero_data.id, _token),
+					MultiplayerPeer.TRANSFER_MODE_RELIABLE,
+					NetProtocol.CH_RELIABLE)
 	if _in_match:
 		_acc += delta
 		while _acc >= _input_interval:

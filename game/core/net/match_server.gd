@@ -146,6 +146,15 @@ func _on_hello(from: int, d: Dictionary) -> void:
 			return
 		# Slot died in the meantime (e.g. yielded to a fresh join): fall
 		# through to a fresh join.
+	# D30 (reconnect reliability): the client sends exactly one hello per
+	# transport connection, so a hello from a peer that ALREADY holds a slot
+	# is a re-hello whose earlier slot reply was lost on a lossy link (the
+	# client's watchdog re-sent it). Re-announce the slot instead of
+	# fresh-joining - a second character would orphan the first.
+	if slots.has(from) and (session == 0 \
+				or int(slots[from].get("token", 0)) == session):
+		_send_slot(from, slots[from])
+		return
 	var hero_data: HeroData = HeroRegistry.by_id(str(d.hero_id))
 	if hero_data == null:
 		hero_data = HeroRegistry.default_hero()
@@ -500,6 +509,15 @@ func _perk_idx(d: PerkData) -> int:
 
 func _send_all(buf: PackedByteArray) -> void:
 	_tx(0, buf, MultiplayerPeer.TRANSFER_MODE_RELIABLE, NetProtocol.CH_RELIABLE)
+
+## D30: (re-)announce a slot to its peer (shared by the reattach and the
+## idempotent re-hello paths).
+func _send_slot(from: int, s: Dictionary) -> void:
+	var ch: CharacterEntity = s.get("ch", null)
+	_send_to(from, NetProtocol.pack_slot(0, int(char_ids.get(ch, 0)),
+			int(s.get("team", 0)), team_size, world.time, world.target_score,
+			world.match_duration, int(s.get("token", 0)), _mode_code(),
+			_map_code()))
 
 func _send_to(id: int, buf: PackedByteArray) -> void:
 	_tx(id, buf, MultiplayerPeer.TRANSFER_MODE_RELIABLE, NetProtocol.CH_RELIABLE)
