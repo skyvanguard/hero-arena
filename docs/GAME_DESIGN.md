@@ -207,6 +207,44 @@ Design rules: 3 spawn points per team with the CENTER spawn on the central
 lane (it doubles as the CTF base / escort endpoint), every asset inside the
 play area, and layouts that differ in geometry, not just reskin.
 
+## Progression v2 (Phase 7) — mastery, achievements, seasonal cosmetics
+
+All progression is **cosmetic-only** (the directive: no pay-to-win, nothing
+here touches a match; the server never reads the local profile):
+
+- **Hero mastery (D22, unchanged):** mastery is a pure function of the
+  per-hero stat seed (plays/wins/kills/mvp × weights in
+  `content/progression.tres`), on the shared level curve, gating the 5
+  palette variants per hero (`content/cosmetics/hero_variants.tres`).
+- **Achievements (D26, new):** data-driven (`AchievementData` resources in
+  `content/achievements/achievements.tres`, evaluated at match end against
+  the profile's cumulative counters, which come from server-side match
+  stats). One-shot: an achievement never re-unlocks. Rewards are cosmetic
+  only — none, or an early cosmetic-variant unlock (the variant bank takes
+  the max of the mastery gate and the granted variants).
+
+| id | Condition (target) | Reward |
+|---|---|---|
+| First Light | 1 match played | — |
+| Momentum | 10 wins | — |
+| Relentless | 100 kills | — |
+| Marksman | 25 headshots | Kestrel variant 3 |
+| Match Maker | 10 MVPs | Patch variant 3 |
+| Wing Commander | 15 matches as Kestrel | — |
+| Full Throttle | 15 matches as Blitz | — |
+| Rising Star | account level 10 | — |
+| On Fire | 5-kill streak in one match | Nimbus variant 3 |
+| Season Veteran | 50 matches | — |
+
+(“variant 3” = palette index 2, the third colorway.)
+
+- **Seasonal cosmetics (D26, new):** a season is a named cosmetic pack —
+  `SeasonData` resources in `content/cosmetics/seasons.tres` list
+  (hero, variant) entries and which season is current. Adding a season is
+  a data change; selection still requires the variant to be unlocked
+  (mastery or achievement), so the season is a track label, never a power
+  source. Season 1 “First Forge” ships with one variant per hero.
+
 ## Passive tuning (Phase 7) — the full roster, verified in the pipeline
 
 Every hero's sub-role identity is a PASSIVE that is always on, data-driven

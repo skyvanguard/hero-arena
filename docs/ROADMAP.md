@@ -120,7 +120,7 @@
 - [x] **Perks** (in-match level 2/3, 2 choices each; data-driven; ult modifiers as extension) - D25: PerkSystem + PerkPool content, server-authoritative, bots + wire (v1.6), 50-check battery (38 sim + 12 UI); ult charge modifier included
 - [x] **Role/sub-role passives** tuned for the full roster (registry proven in Phase 3) - round 41: all six passives behavior-verified in the real pipeline (test_passives, 25 checks: physics speed, damage mitigation, cooldown timing, aura gates, tick-heal vs control world, streak decay, passive x perk x ult multiplicative stacking, identity uniqueness)
 - [x] Additional modes + map pool growth (2 more maps) - round 42: The Sawmill (48 m flanking corridors + central ridge) and Saltline (56 m open + elevated corners) as pure Map data; test_map now validates the whole pool (17 checks: integrity, bounds, mode-follow, 6-bot fight on the new map)
-- [ ] Progression v2 (hero mastery, achievements, seasonal cosmetics — cosmetic only)
+- [x] Progression v2 (hero mastery, achievements, seasonal cosmetics — cosmetic only) - round 43: D26 - 10 data-driven achievements (conditions over server-stat-derived profile counters, one-shot, cosmetic rewards incl. early variant unlocks) + seasonal cosmetic packs (SeasonData/SeasonBank, Season 1 ships, current-season is content); mastery (D22) regression-tested; test_progression_v2 (23 checks); results overlay shows new achievements + season label
 - [ ] Monetization-ready shop architecture (optional; cosmetics-only rule enforced by content schema)
 - [ ] Map voting polish (anti-repetition rotation)
 - [ ] Matchmaking v2 (win-probability model, grouping-advantage handling, region prioritization for LATAM)
