@@ -2,9 +2,11 @@ class_name Arena
 extends RefCounted
 ## Data-driven arena (Phase 6, D18): geometry comes from a Map Resource
 ## (content/maps/*.tres) — lanes, cover, verticality, potions, spawns are
-## all @exports, so a new map is a data file, not a code change. Two maps
-## ship: Crossdocks (44 m, the Phase 1 placeholder layout, renamed) and
-## The Foundry (52 m, center core ring). Original geometry only.
+## all @exports, so a new map is a data file, not a code change. Four maps
+## ship: Crossdocks (44 m, the Phase 1 placeholder layout, renamed), The
+## Foundry (52 m, center core ring), The Sawmill (48 m, flanking corridors
+## around a raised central ridge) and Saltline (56 m, open field with two
+## elevated corners and long sightlines). Original geometry only.
 ## build(world) with no map uses the default map (regression-safe).
 
 const SIZE := 44.0  # legacy fallback size (pre-D18 hardcoded layout)

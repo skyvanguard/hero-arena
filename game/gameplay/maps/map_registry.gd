@@ -6,7 +6,7 @@ const DEFAULT_ID := "crossdocks"
 const DIR := "res://content/maps/"
 
 static func ids() -> Array:
-	return ["crossdocks", "foundry"]
+	return ["crossdocks", "foundry", "sawmill", "saltline"]
 
 static func get_map(id: String) -> Map:
 	var mid := id if id != "" else DEFAULT_ID
