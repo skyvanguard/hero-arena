@@ -108,8 +108,35 @@ version.
 3. `docker run ... heroarena/server` + `docker_smoke.tscn` -> SMOKE PASS.
 4. Tag the image `vX.Y.Z`; record the commit hash + date below.
 
+## Client release assets (GitHub Releases `demo-0.1.0`)
+
+The playable artifacts (Android APK + Linux client) live on the
+[releases page](https://github.com/skyvanguard/hero-arena/releases), not in
+the repo. Refresh procedure (D38, round 54):
+
+```bash
+cd game
+$G --headless --path . --export-release Android build/demo/heroarena.apk
+$G --headless --path . --export-release "Linux" build/demo/heroarena.x86_64.x86_64
+# then: delete the old assets and upload the three files to the release
+# (GitHub API; see the round-54 run for the exact calls)
+```
+
+Content verification for a release export: the official export binary
+rejects `--main-pack` and scene overrides (path overrides compiled out),
+and PCK file payloads are compressed, so plain `grep` on the `.pck` is not
+a content check. Load the pack from the editor binary instead:
+
+```bash
+$G --headless --main-pack build/demo/heroarena.x86_64.pck --script probe.gd
+# probe: load("res://core/net/lobby_protocol.gd") and inspect
+# get_script_constant_map() -> ROOM_ALPHABET/T_ROOMJOIN present = D35 code
+# actually shipped.
+```
+
 ### Release log
 
 | Version | Commit | Date | Notes |
 |---|---|---|---|
 | v0.1.0 (dev) | 1f20d9e | round 49 | first one-command release: dedicated server verified end-to-end via docker_smoke (external ENet client, slot + snapshots); image rebuilt with rounds 40-49 (perks, passives, 4 maps, 4 modes, progression v2 + shop + events + coach, matchmaking v2, reconnect fix) |
+| — (client refresh, D38) | 78bde8e | round 54 | release assets swapped in place on `demo-0.1.0`: Android APK + Linux pck/binary re-exported from the current tree (D35 room codes, D36 contribution docs, D37 walkthrough included); pck content probe confirmed `ROOM_ALPHABET`/`T_ROOMJOIN` in the shipped pack; APK on-device check still pending hardware (docs/PERFORMANCE.md) |

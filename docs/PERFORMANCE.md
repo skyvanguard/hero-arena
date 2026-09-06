@@ -92,7 +92,7 @@ is not a device signal — see the real-device table below.
 
 | Device | Date | Renderer | FPS (steady) | Worst frame | Notes |
 |---|---|---|---|---|---|
-| _pending_ | — | mobile | — | — | Phase 6 gate: low-end ≥ 30 / mid ≥ 60 on all four maps (no device attached in dev env as of round 39) |
+| _pending_ | — | mobile | — | — | Phase 6 gate: low-end ≥ 30 / mid ≥ 60 on all four maps. No device attached in the dev env (re-verified round 54: `adb devices` empty). The test artifact is current: the release APK on GitHub Releases was re-exported from `78bde8e` in round 54 (D38, docs/RELEASE.md), so only the measurement is outstanding |
 
 ### 2026-09-04 — dedicated server, 2-core budget (Phase 5, round 27)
 
