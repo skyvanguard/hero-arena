@@ -292,6 +292,23 @@ here touches a match; the server never reads the local profile):
   (mastery or achievement), so the season is a track label, never a power
   source. Season 1 “First Forge” ships with one variant per hero.
 
+## AI coaching (Phase 7) — post-match tips from authoritative stats
+
+The post-match coach (Phase 7 item 8) is a **deterministic, rule-based**
+"AI": a pure function of the **authoritative stats row** (server-computed
+`world.stats_rows`), the match outcome (won / MVP) and the mode — no
+network dependency, no randomness, headless-testable, and every threshold
+and sentence is data-driven in `content/coach/coach.tres`
+(`CoachConfig`). Rules: an **aim** tip (headshot rate far below par with
+enough kill volume), a **survival** tip (dying more than you kill), and
+positives in priority order — MVP praise, streak praise, or a clean-win
+line — plus a **per-mode objective note** (tdm/control/capture/escort,
+content-defined). Output budget: at most `max_tips` (3), of which at most
+`max_warnings` (2) — warnings first. The coach is **behavior-only**: no
+tip ever names a hero (consistent with the no-hero-forcing rule). The
+results screen renders a COACH section (both net and local paths feed
+`info["coach"]`).
+
 ## Shop (Phase 7) — monetization-ready, cosmetics only by schema
 
 The shop is the monetization-ready architecture (data-driven `ShopItemData`
