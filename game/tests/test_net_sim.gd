@@ -79,8 +79,13 @@ func _ready() -> void:
 	get_tree().quit(fails)
 
 func _run() -> void:
-	# 1: connect + slot through the lossy link (reliable channel + 150 ms RTT).
-	await _frames(90)  # 1.5 s
+	# 1: connect + slot through the lossy link (reliable channel + 150 ms
+	# RTT; bounded wait: a lost slot reply is recovered by the D30
+	# re-hello watchdog, so give it time).
+	var cw := 0
+	while client.my_id < 0 and cw < 450:
+		await get_tree().physics_frame
+		cw += 1
 	check("sim: client connects and gets a slot (150 ms RTT)",
 			client.my_id >= 0 and server.slots.size() == 1,
 			"my_id=%d slots=%d" % [client.my_id, server.slots.size()])
@@ -145,13 +150,29 @@ func _run() -> void:
 	client2.sim_in = l2c
 	l2c.on_packet = func(_id: int, buf: PackedByteArray) -> void:
 		client2._on_peer_packet(0, buf)
+	# D30: kill the reply path around the reattach - without the client's
+	# re-hello watchdog + the server's idempotent re-announce, this reattach
+	# can never confirm (every slot reply is dropped 100%).
+	var chars_before := int(server.char_ids.size())
+	var base_loss := l2c.loss
+	l2c.loss = 1.0
 	client2._on_connected()
-	await _frames(90)
+	var rw := 0
+	while client2.my_id < 0 and rw < 120:
+		await get_tree().physics_frame
+		rw += 1
+	l2c.loss = base_loss
+	var rw2 := 0
+	while client2.my_id < 0 and rw2 < 420:
+		await get_tree().physics_frame
+		rw2 += 1
 	var s2: Dictionary = server.slots.get(PEER, {})
-	check("sim: reattach reuses the same character",
+	check("sim: lost slot reply -> re-hello re-announces the same character",
 			client2.my_id == old_id and s2.get("ch", null) == old_ch
-			and old_ch.controller != null,
-			"my_id=%d old=%d" % [client2.my_id, old_id])
+			and old_ch.controller != null
+			and int(server.char_ids.size()) == chars_before,
+			"my_id=%d old=%d chars=%d" % [client2.my_id, old_id,
+				server.char_ids.size()])
 	check("sim: token consumed after reattach",
 			not server._frozen.has(token), "frozen=%d" % server._frozen.size())
 	# 6: the match kept running through the drop.
