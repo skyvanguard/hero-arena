@@ -140,6 +140,15 @@
 
 **Exit criteria:** a stranger can clone the repo, build, run a server, and load a community hero mod in <1 hour (measured with a volunteer, documented). Rehearsed 2026-09-06 (D37) from a fresh GitHub clone at `0b624a2`: `--import` clean (0 script errors) → `validate_mods` loads the community mod (`VALIDATE: 0 issue(s), 1 mod(s)`) → `docker build -f server/Dockerfile -t heroarena/server .` + one-command run → `docker_smoke` **SMOKE PASS** (external ENet client, my_id=6 after 8.0 s). Agent-run wall time ~10 min with a warm docker cache; a human-volunteer confirmation is still welcome.
 
+**Playtest note (Phase 8 exit, guardrail 3):** the fun metric for a community phase is
+"does the shipped thing run for a stranger" — the D37 rehearsal above is the
+measurement. Complementary bot playtest: the D37 walkthrough run (seed 777) is a
+deterministic 24 s 3v3 bot match — 9 kills, headshots in the feed, deaths and
+respawns flowing, score 2:7 at capture end. One-seed sample only: team 1 drew
+the stronger hero shuffle in that seed, so the 2:7 is roster luck, not a
+balance signal (bot K/D bands and difficulty spread are the standing balance
+instruments, tests/test_bots + ARCH bot-eval notes).
+
 ---
 
 ## Cross-Phase Guardrails

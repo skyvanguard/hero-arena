@@ -6,6 +6,8 @@ A spiritual successor to *T3 Arena* — not a clone: the fast, readable, small-t
 
 > Take what made T3 Arena fun, take the depth and hero design philosophy of Overwatch, eliminate the problems players complained about, and build the game as an open, extensible project.
 
+[![architecture walkthrough — a real 3v3 bot match rendered from the authoritative sim](docs/walkthrough.gif)](docs/WALKTHROUGH.md)
+
 ## Status
 
 **All roadmap phases shipped** (2026-09-06, through Phase 8) — the full
