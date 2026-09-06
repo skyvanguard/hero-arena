@@ -8,12 +8,16 @@ A spiritual successor to *T3 Arena* — not a clone: the fast, readable, small-t
 
 ## Status
 
-**Phase 6 in progress** (2026-09-05) — the first complete match is on device:
-3v3 (1v1–6v6 by config) across four modes (TDM / Control / Capture / Escort) on two
-original maps, six original heroes, four bot difficulties offline and as queue fill,
-lobby + party-aware matchmaking with bot fill, authoritative dedicated server,
-results + progression v1, mode & map voting, cosmetics/mastery display, and
-customizable mobile controls. See [docs/ROADMAP.md](docs/ROADMAP.md) for the
+**All roadmap phases shipped** (2026-09-06, through Phase 8) — the full
+directive: 3v3 (1v1–6v6 by config) across four modes on four original maps,
+six original heroes (plus one community mod), perks/progression/seasonal
+cosmetics, events, matchmaking v2, AI coaching, four bot difficulties offline
+and as queue fill, lobby + party-aware matchmaking, authoritative dedicated
+server (docker, one command, room codes), mod support v1 with validation and
+a starter community mod, and a complete doc set (architecture walkthrough
+included, [docs/WALKTHROUGH.md](docs/WALKTHROUGH.md)). Open sign-off: the
+real-device performance table (needs an Android device — see
+docs/PERFORMANCE.md). See [docs/ROADMAP.md](docs/ROADMAP.md) for the
 phase-by-phase status.
 
 - Research complete: T3 Arena, Overwatch, open-source landscape, engine evaluation
