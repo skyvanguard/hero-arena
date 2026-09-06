@@ -118,7 +118,7 @@
 ## 7. Phase 7 — Systems
 
 - [x] **Perks** (in-match level 2/3, 2 choices each; data-driven; ult modifiers as extension) - D25: PerkSystem + PerkPool content, server-authoritative, bots + wire (v1.6), 50-check battery (38 sim + 12 UI); ult charge modifier included
-- [ ] **Role/sub-role passives** tuned for the full roster (registry proven in Phase 3)
+- [x] **Role/sub-role passives** tuned for the full roster (registry proven in Phase 3) - round 41: all six passives behavior-verified in the real pipeline (test_passives, 25 checks: physics speed, damage mitigation, cooldown timing, aura gates, tick-heal vs control world, streak decay, passive x perk x ult multiplicative stacking, identity uniqueness)
 - [ ] Additional modes + map pool growth (2 more maps)
 - [ ] Progression v2 (hero mastery, achievements, seasonal cosmetics — cosmetic only)
 - [ ] Monetization-ready shop architecture (optional; cosmetics-only rule enforced by content schema)

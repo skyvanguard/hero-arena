@@ -379,7 +379,7 @@ Dispatch is by first magic byte, channel-independent:
   matched the client count exactly, so the pacing is server-confirmed). This
   is the strongest broadcast-leg evidence available without two physical
   phones; the real-WiFi two-phone sign-off remains the acceptance test.
-- Full battery: 26 headless suites, 476 checks (round-38 per-suite counts:
+- Full battery: 27 headless suites, 501 checks (round-38 per-suite counts:
   hero 42 + main 16 + roster 57 + bots 23 + projectile 10 + practice 11 +
   map 12 + mode_control 15 (round 30) + mode_capture 17 + mode_escort 11
   (rounds 31-32) + net 10 + net_props 20 + net_sim 10 + net_profiles 30 +
@@ -392,8 +392,10 @@ Dispatch is by first magic byte, channel-independent:
   perks: XP curve, role-filtered offers, determinism, every effect key,
   bot picks, reset, E_PERK + snapshot round-trips incl. old-server
   backward-compat) + perk_ui 12 (round 40; headless UI smoke: choice
-  panel, tap -> pick signal on both HUDs, picked-perk badge, keys 1/2)).
-  Note: under heavy machine load several net suites flake
+  panel, tap -> pick signal on both HUDs, picked-perk badge, keys 1/2)
+  + passives 25 (round 41; Phase 7 item 2: all six sub-role passives
+  behavior-verified in the real pipeline + passive x perk x ult stacking)
+  . Note: under heavy machine load several net suites flake
   (frame-based waits vs real-time SimLink latency): test_net_profiles
   (proven pre-existing at the pristine round-30 baseline), test_net_sim
   and test_roster (observed once each under a loaded battery; green on

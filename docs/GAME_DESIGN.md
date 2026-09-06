@@ -192,6 +192,30 @@ heavy bolt — range and setup over reaction.
   faster he shoots — rewarding holding the corner of a lane.
 - 48 dps harness; his TTK is slow (2.08 s) — the controller does not win
   the 1v1 TTK race, he wins the fight by making the enemy sluggish.
+## Passive tuning (Phase 7) — the full roster, verified in the pipeline
+
+Every hero's sub-role identity is a PASSIVE that is always on, data-driven
+(`content/heroes/*.tres`, one `PassiveData` per hero), and applied through
+the same multiplier pipeline as perks (no per-hero code branches in the sim
+beyond the six declared passive kinds). Tuned values and the behavior that
+the `test_passives` suite (25 headless checks) proves for each one:
+
+| Hero | Sub-role | Passive | Tuned values | Verified behavior |
+|---|---|---|---|---|
+| Kestrel | Sustained | Wingbeats | 5 hits / 2 s window, 2 tiers: +5%/-10% then +10%/-20% (speed/spread) | streak builds per landed hit, decays after the window |
+| Blitz | Sprint | Overdrive | constant +12% move speed | measured in physics: velocity = base_speed x 1.12 |
+| Bastion | Armor | Reactive Plating | flat -20% incoming damage | measured in the damage pipeline: 20 raw -> 16, any hit type |
+| Mira | Field | Mending Presence | 5 HP/s tick to allies within 7 m | measured vs a no-Mira control world; radius + team + alive gates hold |
+| Patch | Flex | Toolkit | all ability cooldowns x0.8 | measured: Q1 (10 s) re-readies in 8.0 s of sim |
+| Nimbus | Zone | Static Charge | +8% fire rate while a live ENEMY is within 10 m | aura on/off with enemy range; an ally in radius does not trigger it |
+
+**Stacking rules (verified, not assumed):** passive x perk x ultimate are
+multiplicative on the same pipeline (e.g. Blitz: 1.12 passive x 1.5 ult x
+1.08 speed perk = 1.68 x 1.08 measured), passives never stack with other
+passives (exactly one per hero, one per sub-role, unique ids and kinds), and
+a passive never changes matchmaking, progression, or unlocks — it is an
+in-match identity, like everything else in this game.
+
 ## Roster plan (Phase 3 fills #2–#6)
 
 2 Assault, 1 Tank, 2 Support/Utility, 1 Controller (directive §6).
