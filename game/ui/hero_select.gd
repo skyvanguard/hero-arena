@@ -640,7 +640,12 @@ func _on_lob_assign(info: Dictionary) -> void:
 	_lob_in_queue = false
 	var host_port := str(info.get("host")) + ":" + str(info.get("port"))
 	var mode_s: String = str(info.get("mode", "tdm"))
-	_lob_status.text = "joining " + host_port + "  [" + mode_s + "]"
+	# D28: the lobby's win-probability estimate for this join (side A = us).
+	var wp_txt := ""
+	var wp: float = float(info.get("win_prob", -1.0))
+	if wp >= 0.0:
+		wp_txt = "  P(win) ~ %d%%" % int(wp * 100.0 + 0.5)
+	_lob_status.text = "joining " + host_port + "  [" + mode_s + "]" + wp_txt
 	_lob_play_btn.text = "PLAY"
 	if _hero != null:
 		# match_id (D20): the lobby's id of this match - the results screen
@@ -654,7 +659,12 @@ func _on_play_online() -> void:
 		return
 	_lob_in_queue = true
 	var code: String = str(Regions.all()[_lob_region_idx].code)
-	_lob.join_queue(code, 1, 0, "P1")
+	# D28: the queue rating derives from the profile's account level on the
+	# shared curve - level 1 = 1000 (neutral), +40 per level above.
+	var skill := 1000
+	if profile != null:
+		skill = 1000 + 40 * maxi(profile.level - 1, 0)
+	_lob.join_queue(code, 1, skill, "P1")
 	_lob_status.text = "joining queue…"
 	_lob_status.modulate = Color(0.95, 0.8, 0.4)
 	_lob_play_btn.text = "WAITING…"

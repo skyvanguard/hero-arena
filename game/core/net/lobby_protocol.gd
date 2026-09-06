@@ -8,7 +8,8 @@ extends RefCounted
 ## All strings ASCII. Message types:
 ##   client -> lobby: ping, join {region, party, skill, name}
 ##   lobby -> client: hello {region, matches, waiters}, pong,
-##                    queue {stage, waited, open}, assign {host, port, ...}
+##                    queue {stage, waited, open}, assign {host, port, ...,
+##                    win_prob (D28: join win-chance estimate, -1 unknown)}
 ##   match -> lobby:  reg {ip, port, region, team_size, name, mode, map},
 ##                    state {humans, over, mode, map}, hb
 ##   lobby -> match:  regack {match_id}, setmode {match_id, mode} (D20),

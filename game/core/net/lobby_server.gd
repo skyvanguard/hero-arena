@@ -39,6 +39,10 @@ extends Node
 var peer: PacketPeerUDP
 var time := 0.0
 var region := "latam_saopaulo"
+## D28 (matchmaking v2): the stage windows + fairness band load from
+## MMConfig (content/matchmaking.tres) in setup(); the fields stay public
+## and overridable (tests drive fast stages through them, v1 behavior).
+var mm: MMConfig
 var fill_after := 60.0
 var strict_until := 5.0
 var skill_until := 15.0
@@ -59,8 +63,14 @@ signal client_dropped()
 
 func setup(port: int, lobby_region: String, fill_after_s: float = 60.0) -> void:
 	region = lobby_region
+	# D28: data-driven queue windows (no magic numbers in the engine).
+	mm = MMConfig.load_config()
+	strict_until = mm.strict_until
+	skill_until = mm.skill_until
 	if fill_after_s > 0.0:
 		fill_after = fill_after_s
+	else:
+		fill_after = mm.region_until
 	peer = PacketPeerUDP.new()
 	# 4.7: bind() (set_mode_server was removed) - one arg, all interfaces.
 	var err: int = peer.bind(port)
@@ -186,6 +196,10 @@ func _dispatch(key: String, msg: Dictionary) -> void:
 				map_vote_source = {},
 				map_vote_weight = {},
 				map_decided = false,
+				# D28: the skill ledger - ratings of the players this lobby
+				# assigned here, decayed in T_STATE (see the handler).
+				skill_sum = 0,
+				ledger_humans = 0,
 			}
 			_send(key, {t = LobbyProtocol.T_REGACK, match_id = id})
 			match_registered.emit(matches[id].duplicate())
@@ -197,6 +211,12 @@ func _dispatch(key: String, msg: Dictionary) -> void:
 				var m: Dictionary = matches[mid]
 				m.humans = clampi(int(msg.get("humans", m.humans)), 0, int(m.team_size))
 				m.over = bool(msg.get("over", m.over))
+				# D28: ledger decay - a departure is unknown, so the ratings
+				# scale down proportionally (documented approximation).
+				if int(m.ledger_humans) > int(m.humans):
+					m.skill_sum = int(float(int(m.skill_sum)) * float(int(m.humans))
+							/ float(int(m.ledger_humans)))
+				m.ledger_humans = int(m.humans)
 				# D20: the server reports the mode it is actually running, so
 				# the directory reflects the voted-mode swap at the next
 				# in-place reset (the 2 s state heartbeat keeps this fresh).
@@ -397,6 +417,9 @@ func _stage_of(w: Dictionary) -> int:
 func _candidates(w: Dictionary) -> Array:
 	var order: Array = Regions.widen_order(str(w.region))
 	var stage := _stage_of(w)
+	# D28: the SKILL stage is the win-probability gate - only FAIR joins
+	# (projected team delta within the band, or unknown skill = v1).
+	var skill_gate: bool = stage == LobbyProtocol.QUEUE_STAGE_SKILL and int(w.skill) > 0
 	var cands: Array = []
 	for id in matches.keys():
 		var m: Dictionary = matches[id]
@@ -409,12 +432,25 @@ func _candidates(w: Dictionary) -> Array:
 		if stage == LobbyProtocol.QUEUE_STAGE_STRICT or stage == LobbyProtocol.QUEUE_STAGE_SKILL:
 			if str(m.region) != str(w.region):
 				continue
-		cands.append({id = int(id), rank = rank, humans = int(m.humans), m = m})
+		# D28: real fairness (the REGION sort prefers it); the SKILL stage
+		# additionally EXCLUDES unfair candidates.
+		var fair := MMConfig.fair_join(mm, int(m.skill_sum), int(m.ledger_humans),
+				int(w.party), int(w.skill) * int(w.party), int(m.team_size))
+		if skill_gate and not fair:
+			continue
+		cands.append({id = int(id), rank = rank, humans = int(m.humans), fair = fair, m = m})
 	cands.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
 		if stage == LobbyProtocol.QUEUE_STAGE_BOTFILL:
 			if a.humans != b.humans:
 				return a.humans < b.humans
 			return a.rank < b.rank
+		if stage == LobbyProtocol.QUEUE_STAGE_REGION:
+			# D28: inside the (LATAM-priority) widen order, FAIR first.
+			if bool(a.fair) != bool(b.fair):
+				return bool(a.fair)
+			if a.rank != b.rank:
+				return a.rank < b.rank
+			return a.humans < b.humans
 		if a.rank != b.rank:
 			return a.rank < b.rank
 		return a.humans < b.humans
@@ -430,6 +466,17 @@ func _run_queue() -> void:
 			var m: Dictionary = pick.m
 			waiters.erase(str(key))
 			var stage := _stage_of(w)
+			# D28: project the join against the ledger AS IT STANDS (the
+			# party is not in it yet), then record the party's ratings.
+			var wp := -1.0
+			if int(w.skill) > 0 and int(m.ledger_humans) > 0:
+				var proj: Array = MMConfig.team_projection(int(m.skill_sum),
+						int(m.ledger_humans), int(w.party),
+						int(w.skill) * int(w.party), mm.bot_skill, int(m.team_size))
+				wp = MMConfig.win_prob(mm.skill_k, float(proj[2]))
+			if int(w.skill) > 0:
+				m.skill_sum = int(m.skill_sum) + int(w.skill) * int(w.party)
+				m.ledger_humans = int(m.ledger_humans) + int(w.party)
 			_send(str(key), {
 				t = LobbyProtocol.T_ASSIGN,
 				host = str(m.ip), port = int(m.port), match_id = int(pick.id),
@@ -440,6 +487,7 @@ func _run_queue() -> void:
 				map_tally = m.map_votes.duplicate(true),
 				map_leading = _leading(m, "map"), map_decided = bool(m.map_decided),
 				stage = stage, waited = time - float(w.joined_at),
+				win_prob = wp,
 			})
 			client_assigned.emit({host = str(m.ip), port = int(m.port),
 					region = str(w.region), stage = stage})

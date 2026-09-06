@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="MMConfig" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://core/matchmaking/mm_config.gd" id="1_mm"]
+
+[resource]
+script = ExtResource("1_mm")
+strict_until = 5.0
+skill_until = 15.0
+region_until = 60.0
+skill_window = 400.0
+max_team_delta = 250.0
+bot_skill = 1000.0
+skill_k = 0.004

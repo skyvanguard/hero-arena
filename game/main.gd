@@ -98,8 +98,8 @@ func _on_net_ended(winner: int, score: Array, wtime: float, lost: bool,
 	var mp: int = _net_client._map_code if _net_client != null else 0
 	info["label"] = (ids_m[mc] if mc < ids_m.size() else "tdm").to_upper() \
 			+ "  ·  " + (ids_map[mp] if mp < ids_map.size() else "crossdocks").to_upper()
-		# D27: the map just played - the map-vote UI grays it out (anti-repeat).
-		info["last_map"] = ids_map[mp] if mp < ids_map.size() else "crossdocks"
+	# D27: the map just played - the map-vote UI grays it out (anti-repeat).
+	info["last_map"] = ids_map[mp] if mp < ids_map.size() else "crossdocks"
 	# D20: next-match mode vote (lobby-assigned matches only; offline has
 	# no lobby to vote against).
 	if _net_match_id > 0 and DisplayServer.get_name() != "headless":
@@ -265,7 +265,7 @@ func _on_world_event(name: String, data: Dictionary) -> void:
 		info["achievements"] = info["level"].get("achievements_unlocked", [])
 	info["label"] = MatchConfig.mode_id.to_upper() \
 			+ "  ·  " + MapRegistry.get_map(MatchConfig.map_id).short_name.to_upper()
-		info["last_map"] = MatchConfig.map_id
+	info["last_map"] = MatchConfig.map_id
 	_show_results(winner, sc, wtime, "", info)
 
 ## Results overlay v1 (D19): VICTORY/DEFEAT/DRAW + final score + duration
