@@ -219,6 +219,41 @@ line names it. Consequence: consecutive matches in one queue rotate across
 the pool; a map becomes votable again once another map has played. This is
 a lobby-rule change (D27), server-authoritative as every other vote rule.
 
+## Matchmaking v2 (Phase 7) — the win-probability queue
+
+The queue keeps the 4-stage real-time ladder, and the SKILL stage is now a
+real fairness gate instead of a second same-region pass. All parameters
+live in `content/matchmaking.tres` (MMConfig) — no magic numbers:
+
+| Stage | Window (default) | Rule |
+|---|---|---|
+| STRICT | 0–5 s | same region, any rating (fast first fill, v1) |
+| SKILL | 5–15 s | same region, **fair joins only** (the win-probability model) |
+| REGION | 15–60 s | full widen order (LATAM regions first per the Regions table), fair matches sorted first |
+| BOTFILL | 60 s+ | emptiest match first (v1) |
+
+**The win-probability model:** the lobby keeps a per-match skill ledger
+(ratings of the players it assigned; when the match server reports fewer
+humans the ledger decays proportionally — a departure is unknown, the
+proportional approximation is the documented model). A join is projected
+even-split (the lobby does not see team assignment — the match server
+does — and bot-filled seats take the neutral `bot_skill` rating); the join
+is FAIR when the projected average team delta stays within `max_team_delta`
+(250). `win_prob(delta)` (logistic, `skill_k`) converts a signed delta into
+a win chance: 0.5 at parity, ~73% at the full band; the assign message
+carries the estimate and the queue UI shows it (`P(win) ~ N%`).
+
+**Grouping advantage:** a party is projected as a block (its size × its
+average rating) against the other team plus neutral bots, so a stacked
+group is rejected in the SKILL stage rather than handed an easy match;
+parties still only enter when the whole group fits (v1 rule). Unknown
+rating (v1 clients send 0) is treated as neutral — exactly the v1
+behavior, so old clients queue unchanged.
+
+**Region priority:** LATAM-first is the Regions table order (the REGION
+stage widens São Paulo/Bogotá/CDMX before NA/EU/Asia) — matchmaking v2
+sizes the windows and the fairness band; the priority itself is content.
+
 ## Progression v2 (Phase 7) — mastery, achievements, seasonal cosmetics
 
 All progression is **cosmetic-only** (the directive: no pay-to-win, nothing

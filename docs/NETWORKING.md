@@ -386,7 +386,7 @@ Dispatch is by first magic byte, channel-independent:
   matched the client count exactly, so the pacing is server-confirmed). This
   is the strongest broadcast-leg evidence available without two physical
   phones; the real-WiFi two-phone sign-off remains the acceptance test.
-- Full battery: 28 headless suites, 534 checks (round-38 per-suite counts:
+- Full battery: 29 headless suites, 548 checks (round-38 per-suite counts:
   hero 42 + main 16 + roster 57 + bots 23 + projectile 10 + practice 11 +
   map 12 + mode_control 15 (round 30) + mode_capture 17 + mode_escort 11
   (rounds 31-32) + net 10 + net_props 20 + net_sim 10 + net_profiles 30 +
@@ -402,7 +402,7 @@ Dispatch is by first magic byte, channel-independent:
   (map suite 12 -> 17 in round 42: whole-pool integrity + bounds, mode-follow
   and 6-bot fight on the new maps) + progression_v2 23 (round 43; D26: achievement conditions/thresholds,
   one-shot grants, old-save compat, reward gating, D26 stat columns,
-  seasonal cosmetic validation) + passives 25 (round 41; Phase 7 item 2: all six sub-role passives
+  seasonal cosmetic validation) + matchmaking_v2 14 (round 45; D28: win-probability model - MMConfig load, win_prob math, even-split projection + fairness gate, party-block grouping, live strict/v1 assignments with win_prob, SKILL-stage gate, REGION fair-preference, BOTFILL ordering, ledger decay, no stranding) + passives 25 (round 41; Phase 7 item 2: all six sub-role passives
   behavior-verified in the real pipeline + passive x perk x ult stacking)
   . Note: under heavy machine load several net suites flake
   (frame-based waits vs real-time SimLink latency): test_net_profiles
@@ -463,7 +463,7 @@ reliability**:
 | hello{region,matches,waiters} | s->c | - | Sent on first ping |
 | join{region,party,skill,name} | c->s | yes | Creates the waiter |
 | queue{stage,waited,open} | s->c | - | >=1 Hz while queued; doubles as keep-alive |
-| assign{host,port,match_id,region,name,mode,map,tally,leading,decided,map_tally,map_leading,map_decided,stage,waited} | s->c | - | mode/map = the match's mode + map ids (D18: the queued client knows what it is joining); tally/leading/decided + map_* = the D20/D21 vote state (mode and map are independent tallies) |
+| assign{host,port,match_id,region,name,mode,map,tally,leading,decided,map_tally,map_leading,map_decided,stage,win_prob (D28: join win-chance, -1 unknown),waited} | s->c | - | mode/map = the match's mode + map ids (D18: the queued client knows what it is joining); tally/leading/decided + map_* = the D20/D21 vote state (mode and map are independent tallies) |
 | reg{ip,port,region,team_size,name,mode,map} | s->s | yes | A game server registers its match (published address + mode D18 + map D21) |
 | regack{match_id} | s->s | - | |
 | state{humans,over,mode,map} | s->s | - | Live match state (2 s heartbeat while the server is alive, so the entry survives the 5 s reap during long silent bot-only stretches); mode/map = what the server is actually running, so the directory reflects voted swaps at the next reset; ANY message from a match peer refreshes match liveness |
