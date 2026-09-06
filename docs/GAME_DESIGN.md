@@ -292,6 +292,33 @@ here touches a match; the server never reads the local profile):
   (mastery or achievement), so the season is a track label, never a power
   source. Season 1 “First Forge” ships with one variant per hero.
 
+## Shop (Phase 7) — monetization-ready, cosmetics only by schema
+
+The shop is the monetization-ready architecture (data-driven `ShopItemData`
+resources in `content/shop/shop.tres`, catalog + earn rates in
+`ShopBank`). The **cosmetics-only rule is enforced by the content
+schema**: an item's entire effect is a (hero, variant) cosmetic unlock —
+there is no field for a stat bonus, weapon or anything gameplay-affecting,
+so a gameplay item cannot even be represented in content. `validate`
+additionally checks resolution, positive pricing, known currencies, the
+no-free-default rule (variant 0 is never sold) and unique (hero, variant)
+pairs.
+
+**Currency:** "gear" is earned in matches (data-driven rates: per match +
+win bonus, in the shop .tres). No real money is anywhere in this code
+path. The purchase engine (`PlayerProfile.buy_item`) and the currency
+ledger are **currency-agnostic** — a payment provider can later introduce
+new currencies (IAP gems, a paid currency pack) without touching the
+purchase/ownership flow. Purchases are one-shot; a bought variant grants
+cosmetic early access exactly like achievement/event rewards (the variant
+dots now reflect any grant via `HeroVariantBank.variant_unlocked`, which
+also fixed D26/D29 grants looking locked in the hero-select dots).
+
+Shipped catalog (8 items, 3 price tiers): tier-1 hero variant 2s
+(250–350 gear), tier-2 variant 4s (600), tier-3 variant 5s (900). At the
+data-driven earn rate (~40 gear per win) the cheapest cosmetic costs
+under 6 wins, the priciest under 23 — a slow, purely cosmetic sink.
+
 ## Events (Phase 7) — participation/win/objective rewards, cosmetic only
 
 Events are the limited-time reward track (data-driven `EventData`
