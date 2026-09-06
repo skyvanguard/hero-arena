@@ -234,6 +234,16 @@ Dispatch is by first magic byte, channel-independent:
 - Bots have `net_comp_delay = 0` (they run at server time) — lag-comp only
   bends validation for human input.
 
+### Reconnect reliability (D30, round 46)
+
+A slot reply lost on a lossy link no longer dead-ends the connect:
+the client's re-hello watchdog (2 s, max 4 retries, while `my_id < 0`)
+re-sends the hello with the same token, and the server re-announces the
+existing slot for a peer that already holds one (idempotent re-hello)
+instead of fresh-joining a second character. test_net_sim and
+test_net_profiles verify it deterministically by dropping the reply path
+100% around the token reattach.
+
 ## 7. Testing
 
 - `tests/test_net.tscn` — in-process loopback (server + bot-filled 3v3 +
@@ -386,7 +396,7 @@ Dispatch is by first magic byte, channel-independent:
   matched the client count exactly, so the pacing is server-confirmed). This
   is the strongest broadcast-leg evidence available without two physical
   phones; the real-WiFi two-phone sign-off remains the acceptance test.
-- Full battery: 29 headless suites, 548 checks (round-38 per-suite counts:
+- Full battery: 30 headless suites, 563 checks (round-38 per-suite counts:
   hero 42 + main 16 + roster 57 + bots 23 + projectile 10 + practice 11 +
   map 12 + mode_control 15 (round 30) + mode_capture 17 + mode_escort 11
   (rounds 31-32) + net 10 + net_props 20 + net_sim 10 + net_profiles 30 +
@@ -402,13 +412,16 @@ Dispatch is by first magic byte, channel-independent:
   (map suite 12 -> 17 in round 42: whole-pool integrity + bounds, mode-follow
   and 6-bot fight on the new maps) + progression_v2 23 (round 43; D26: achievement conditions/thresholds,
   one-shot grants, old-save compat, reward gating, D26 stat columns,
-  seasonal cosmetic validation) + matchmaking_v2 14 (round 45; D28: win-probability model - MMConfig load, win_prob math, even-split projection + fairness gate, party-block grouping, live strict/v1 assignments with win_prob, SKILL-stage gate, REGION fair-preference, BOTFILL ordering, ledger decay, no stranding) + passives 25 (round 41; Phase 7 item 2: all six sub-role passives
+  seasonal cosmetic validation) + matchmaking_v2 14 (round 45; D28: win-probability model - MMConfig load, win_prob math, even-split projection + fairness gate, party-block grouping, live strict/v1 assignments with win_prob, SKILL-stage gate, REGION fair-preference, BOTFILL ordering, ledger decay, no stranding) + events 15 (round 46; D29: bank integrity + validate catches, exact participation threshold, single/multi mode filters, inactive events, one-shot, reward gating at mastery 1, cosmetic-only mastery, old 7-arg call sites, old-save compat + round-trip, view rows) + passives 25 (round 41; Phase 7 item 2: all six sub-role passives
   behavior-verified in the real pipeline + passive x perk x ult stacking)
-  . Note: under heavy machine load several net suites flake
-  (frame-based waits vs real-time SimLink latency): test_net_profiles
-  (proven pre-existing at the pristine round-30 baseline), test_net_sim
-  and test_roster (observed once each under a loaded battery; green on
-  re-run). Re-run quiet for a clean sweep.
+  . Note: under heavy machine load several net suites flake (frame-based
+  waits vs real-time SimLink latency). test_net_profiles and test_net_sim
+  had a structural cause - a slot reply lost on a lossy link dead-ended the
+  reattach; D30 (round 46) fixed it (client re-hello watchdog + server
+  idempotent re-announce) and both suites now verify the recovery
+  deterministically at 100% reply loss. test_roster and
+  test_match_lifecycle were observed once each under a loaded battery;
+  green on re-run. Re-run quiet for a clean sweep.
 
 ## 8. v1.1 tradeoffs (explicit)
 

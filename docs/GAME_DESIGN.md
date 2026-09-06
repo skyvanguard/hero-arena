@@ -292,6 +292,32 @@ here touches a match; the server never reads the local profile):
   (mastery or achievement), so the season is a track label, never a power
   source. Season 1 “First Forge” ships with one variant per hero.
 
+## Events (Phase 7) — participation/win/objective rewards, cosmetic only
+
+Events are the limited-time reward track (data-driven `EventData`
+resources in `content/events/events.tres`, evaluated at match end by
+`EventBank.events_completed` from `PlayerProfile.apply_match`). An event
+has a **goal kind** — `MATCHES` (participation), `WINS` (victory), or `MVP`
+(objective performance: the top-impact player, which on this roster is
+objective-map play), an optional **mode filter** (empty = every mode), a
+target count, and a **cosmetic-only reward** (a variant unlock for a
+hero, or none). One-shot: an event completes once, then never again.
+
+The **no-hero-forcing rule**: an event never requires, filters by, or
+rewards playing a specific HERO — the reward names the hero whose
+cosmetic variant is granted; eligibility is open to the whole roster.
+Grants flow through `profile.event_variant_unlocks` and the variant bank
+takes the max of the mastery gate, achievement grants and event grants —
+so the cosmetic-only rule holds by construction (no stat field is
+written).
+
+Shipped events (Season 1 flavor): **Forge Week** (play 10 matches →
+Bastion variant), **Capture Push** (win 5 Capture matches → Blitz
+variant), **Objective Sprint** (3 MVPs on an objective mode → Mira
+variant). Adding/retiring an event is a content change; inactive events
+stay in the bank as history. The results overlay shows
+"EVENTS COMPLETE" rows for events finished by the just-ended match.
+
 ## Passive tuning (Phase 7) — the full roster, verified in the pipeline
 
 Every hero's sub-role identity is a PASSIVE that is always on, data-driven
