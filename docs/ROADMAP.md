@@ -132,11 +132,11 @@
 ## 8. Phase 8 — Community
 
 - [x] Dedicated server release (docker, one command: docker run …/hero-shooter-server) - round 49: D33 - image rebuilt from current tree; `docker run -d -p 7777:7777/udp -p 7778:7778/udp heroarena/server` starts the dedicated server (default tail); verified end-to-end by tools/docker_smoke.tscn (a REAL external ENet client through the published port: slot + snapshots, SMOKE PASS, 0 container error lines); docs/RELEASE.md runbook (ports, options, relay/lobby modes, 2-core budget, versioning, release checklist)
-- [ ] Mod support v1 (heroes/maps/weapons/abilities/modes/cosmetics/balance drop-in; validation tool; versioned mod API)
+- [x] Mod support v1 (heroes/maps/weapons/abilities/modes/cosmetics/balance drop-in; validation tool; versioned mod API) - round 50: D34 - ModLoader scans res://mods + user://mods (user shadows bundled); ModManifest + api_version (versioned, additive-only, API_VERSION 1); drop-in heroes/maps/modes/cosmetics/balance-entries; whole-file balance overrides via ModLoader.resolve() at all 11 load sites (same-type rule); ModValidator + tools/validate_mods.tscn (exit code = issues); docs/MODS.md authoring guide; test_mods (15 checks); roster harness validates 7 heroes
 - [ ] Custom match hosting (private servers, lobby API, room codes)
 - [ ] Contribution workflow (branch model, PR templates, CODE_OF_CONDUCT, asset-license checklist)
 - [ ] Docs complete (CONTRIBUTING, NETWORKING, MOBILE, PERFORMANCE all current; architecture walkthrough video or GIFs)
-- [ ] First community mod published to the mod index
+- [x] First community mod published to the mod index - round 50: D34 - `mods/starter_pack/` (v1.0.0, API 1): original hero Vanta + original map Drift Flats + cosmetic set + baseline balance entry; validated (tools/validate_mods: 0 issues), played by bots, exercised by test_mods; indexed in docs/MODS.md
 
 **Exit criteria:** a stranger can clone the repo, build, run a server, and load a community hero mod in <1 hour (measured with a volunteer, documented).
 
