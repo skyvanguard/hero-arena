@@ -61,8 +61,10 @@ reports and feature ideas both welcome (templates included).
 | [AGENTS.md](AGENTS.md) | Rules for AI development agents on this repo |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | How to contribute (branch model, definition of done, asset-license checklist) |
 | [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) | How we treat each other in the repo and the lobby |
-
-*(NETWORKING.md, MOBILE.md, PERFORMANCE.md, GAME_DESIGN.md grow from Phase 1 onward — see ARCHITECTURE.md §3.)*
+| [docs/MOBILE.md](docs/MOBILE.md) | Android-first: touch input, D24 control customization, building, on-device measurement |
+| [docs/NETWORKING.md](docs/NETWORKING.md) | The net stack: wire protocol, snapshots, lobby protocol v1.6, reconnect, suites |
+| [docs/PERFORMANCE.md](docs/PERFORMANCE.md) | Mobile frame budgets, measured baselines, the real-device table |
+| [docs/WALKTHROUGH.md](docs/WALKTHROUGH.md) | Animated architecture walkthrough (regenerable headless GIF) |TECTURE.md §3.)*
 
 ## License
 

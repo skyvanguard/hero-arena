@@ -89,9 +89,10 @@ G=/path/to/Godot_v4.7.2-stable_linux.x86_64
 cd game && $G --headless --path . --import
 
 # 2. the test battery (one headless process per suite; exit code = fails)
-for f in game/tests/test_*.tscn; do
-  timeout 400 $G --headless --path game res://$f || echo "FAIL $f"
+for f in tests/test_*.tscn; do
+  timeout 400 $G --headless --path . res://$f || echo "FAIL $f"
 done
+# (run from the game/ directory)
 
 # 3. dedicated-server release gate (real ENet client through a published port)
 docker build -f server/Dockerfile -t heroarena/server .
