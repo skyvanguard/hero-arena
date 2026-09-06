@@ -92,7 +92,7 @@ is not a device signal — see the real-device table below.
 
 | Device | Date | Renderer | FPS (steady) | Worst frame | Notes |
 |---|---|---|---|---|---|
-| _pending_ | — | mobile | — | — | Phase 6 gate: low-end ≥ 30 / mid ≥ 60 on both maps (no device attached in dev env as of round 39) |
+| _pending_ | — | mobile | — | — | Phase 6 gate: low-end ≥ 30 / mid ≥ 60 on all four maps (no device attached in dev env as of round 39) |
 
 ### 2026-09-04 — dedicated server, 2-core budget (Phase 5, round 27)
 

@@ -110,7 +110,7 @@
 - [x] Online/LAN multiplayer (from Phase 5) - D12-D15: discovery, lobby, relay
 - [x] Match length 3–8 minutes (timer + kill targets tuned) - content/balance owns duration/targets
 - [x] Results screen (stats, MVP, rewards) + basic progression (account level, hero mastery, cosmetics slots) - D19/D22
-- [ ] Real-device perf pass: low-end 30 / mid 60 on both maps (PERFORMANCE.md sign-off)
+- [ ] Real-device perf pass: low-end 30 / mid 60 on all four maps (PERFORMANCE.md sign-off)
 - [x] Public demo build (APK + PC) + open issue tracker live - round 39: skyvanguard/hero-arena, release demo-0.1.0, docs/BUILD.md
 
 **Exit criteria = directive §45 "definition of success," verbatim:** a user installs the APK, launches, chooses a hero, enters 3v3 (humans or bots), moves, shoots, uses abilities, coordinates, understands the objective, dies, respawns, wins or loses, in ~3–8 minutes, smoothly on real Android.
@@ -119,7 +119,7 @@
 
 - [x] **Perks** (in-match level 2/3, 2 choices each; data-driven; ult modifiers as extension) - D25: PerkSystem + PerkPool content, server-authoritative, bots + wire (v1.6), 50-check battery (38 sim + 12 UI); ult charge modifier included
 - [x] **Role/sub-role passives** tuned for the full roster (registry proven in Phase 3) - round 41: all six passives behavior-verified in the real pipeline (test_passives, 25 checks: physics speed, damage mitigation, cooldown timing, aura gates, tick-heal vs control world, streak decay, passive x perk x ult multiplicative stacking, identity uniqueness)
-- [ ] Additional modes + map pool growth (2 more maps)
+- [x] Additional modes + map pool growth (2 more maps) - round 42: The Sawmill (48 m flanking corridors + central ridge) and Saltline (56 m open + elevated corners) as pure Map data; test_map now validates the whole pool (17 checks: integrity, bounds, mode-follow, 6-bot fight on the new map)
 - [ ] Progression v2 (hero mastery, achievements, seasonal cosmetics — cosmetic only)
 - [ ] Monetization-ready shop architecture (optional; cosmetics-only rule enforced by content schema)
 - [ ] Map voting polish (anti-repetition rotation)

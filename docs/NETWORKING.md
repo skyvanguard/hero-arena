@@ -305,16 +305,20 @@ Dispatch is by first magic byte, channel-independent:
   pressure (D18): a fresh free flag keeps an engaged bot on its ATTACK
   target, a stale one (free > 8 s) pulls it off, and the free-flag clock
   accumulates in step and resets on a steal.
-- `tests/test_map.tscn` — **map framework (round 32, 12 checks)**:
-  registry (both maps resolve, unknown/empty -> default); the Crossdocks
-  data equals the legacy placeholder geometry; The Foundry is a distinct
-  original 52 m layout; building from a map applies its spawns to the
-  world; Capture bases and the Escort lane follow the Foundry spawns
-  (modes-on-map-2 integration); an empty Map falls back to the legacy
-  layout; 6 bots fight on Foundry through the full MatchServer stack for
-  8 s within bounds; MatchConfig.map_id drives the host's map; the
-  hero-select picker's named handlers write MatchConfig and reject unknown
-  ids.
+- `tests/test_map.tscn` — **map framework (round 32, 12 checks; round 42:
+  17 checks over the four-map pool)**: registry (all four maps resolve,
+  unknown/empty -> default); whole-pool integrity (3 spawns per team on
+  the central lane, every asset in-bounds, positive box sizes, distinct
+  layouts); the Crossdocks data equals the legacy placeholder geometry;
+  The Foundry is a distinct original 52 m layout; building from a map
+  applies its spawns to the world; Capture bases and the Escort lane
+  follow the Foundry spawns (modes-on-map-2 integration); an empty Map
+  falls back to the legacy layout; 6 bots fight on Foundry through the
+  full MatchServer stack for 8 s within bounds; Sawmill's spawns reach
+  the world and the Capture/Escort modes follow them; 6 bots fight on
+  Saltline within the 56 m bounds; MatchConfig.map_id drives the host's
+  map; the hero-select picker's named handlers write MatchConfig and
+  reject unknown ids.
 - `tests/test_results.tscn` — **results + progression (round 33, 17
   checks)**: server-side stat accumulation (damage_dealt tracks the final
   applied amount, kill credits killer+victim, source-less kills count the
@@ -379,7 +383,7 @@ Dispatch is by first magic byte, channel-independent:
   matched the client count exactly, so the pacing is server-confirmed). This
   is the strongest broadcast-leg evidence available without two physical
   phones; the real-WiFi two-phone sign-off remains the acceptance test.
-- Full battery: 27 headless suites, 501 checks (round-38 per-suite counts:
+- Full battery: 27 headless suites, 506 checks (round-38 per-suite counts:
   hero 42 + main 16 + roster 57 + bots 23 + projectile 10 + practice 11 +
   map 12 + mode_control 15 (round 30) + mode_capture 17 + mode_escort 11
   (rounds 31-32) + net 10 + net_props 20 + net_sim 10 + net_profiles 30 +
@@ -393,7 +397,8 @@ Dispatch is by first magic byte, channel-independent:
   bot picks, reset, E_PERK + snapshot round-trips incl. old-server
   backward-compat) + perk_ui 12 (round 40; headless UI smoke: choice
   panel, tap -> pick signal on both HUDs, picked-perk badge, keys 1/2)
-  + passives 25 (round 41; Phase 7 item 2: all six sub-role passives
+  (map suite 12 -> 17 in round 42: whole-pool integrity + bounds, mode-follow
+  and 6-bot fight on the new maps) + passives 25 (round 41; Phase 7 item 2: all six sub-role passives
   behavior-verified in the real pipeline + passive x perk x ult stacking)
   . Note: under heavy machine load several net suites flake
   (frame-based waits vs real-time SimLink latency): test_net_profiles

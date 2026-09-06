@@ -192,6 +192,21 @@ heavy bolt — range and setup over reaction.
   faster he shoots — rewarding holding the corner of a lane.
 - 48 dps harness; his TTK is slow (2.08 s) — the controller does not win
   the 1v1 TTK race, he wins the fight by making the enemy sluggish.
+## Maps (original layouts)
+
+Four maps ship (data-only: `content/maps/*.tres`, built by `Arena.build`):
+
+| Map | Size | Layout concept |
+|---|---|---|
+| Crossdocks | 44 m | The Phase 1 layout, renamed: two central lanes with low wall cover, 8 crates, raised corner platforms with ramps |
+| The Foundry | 52 m | Center core ring: crossed walls form a plus/ring of angles around mid, 6 crates |
+| The Sawmill | 48 m | Flanking corridors: a raised central ridge (ramped) splits the field into two wall-lined lanes; crate chokes at the lane corners |
+| Saltline | 56 m | Open field, long sightlines: two elevated corner platforms (4 ramps), sparse mid cover, two potions up high as the verticality reward |
+
+Design rules: 3 spawn points per team with the CENTER spawn on the central
+lane (it doubles as the CTF base / escort endpoint), every asset inside the
+play area, and layouts that differ in geometry, not just reskin.
+
 ## Passive tuning (Phase 7) — the full roster, verified in the pipeline
 
 Every hero's sub-role identity is a PASSIVE that is always on, data-driven
