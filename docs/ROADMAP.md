@@ -131,7 +131,7 @@
 
 ## 8. Phase 8 — Community
 
-- [ ] Dedicated server release (docker, one command: docker run …/hero-shooter-server)
+- [x] Dedicated server release (docker, one command: docker run …/hero-shooter-server) - round 49: D33 - image rebuilt from current tree; `docker run -d -p 7777:7777/udp -p 7778:7778/udp heroarena/server` starts the dedicated server (default tail); verified end-to-end by tools/docker_smoke.tscn (a REAL external ENet client through the published port: slot + snapshots, SMOKE PASS, 0 container error lines); docs/RELEASE.md runbook (ports, options, relay/lobby modes, 2-core budget, versioning, release checklist)
 - [ ] Mod support v1 (heroes/maps/weapons/abilities/modes/cosmetics/balance drop-in; validation tool; versioned mod API)
 - [ ] Custom match hosting (private servers, lobby API, room codes)
 - [ ] Contribution workflow (branch model, PR templates, CODE_OF_CONDUCT, asset-license checklist)
