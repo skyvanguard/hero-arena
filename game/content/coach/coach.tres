@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="CoachConfig" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://core/coach/coach_config.gd" id="1_co"]
+
+[resource]
+script = ExtResource("1_co")
+hs_rate_good = 0.25
+hs_rate_warn = 0.1
+aim_min_kills = 3
+kd_warn = 0.75
+streak_goal = 4
+max_tips = 3
+max_warnings = 2
+tip_aim = "Headshot rate is low ({hs}% of {kills} kills) - lead your shots, aim for the head."
+tip_survive = "You died {deaths} times for {kills} kills - survive longer and re-engage with cover."
+tip_mvp = "You were the top performer - excellent objective play."
+tip_streak = "{streak}-kill streak - elite consistency; try to chain more."
+tip_win = "Solid win - keep the momentum."
+mode_lines = {"capture": "Capture lives and dies at the point - keep the flag under continuous pressure.", "control": "Control is won in the center - trade kills and hold the point.", "escort": "Escort rewards the patient - peel for the payload, do not chase.", "tdm": "Team Deathmatch is pure kill pressure - win the mid-lane fights."}

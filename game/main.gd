@@ -23,6 +23,8 @@ var _in_range := false
 ## + the data-driven XP/level config.
 var profile: PlayerProfile = null
 var progression: ProgressionConfig = null
+## D32: the post-match coach config (data-driven thresholds + wording).
+var coach_cfg: CoachConfig = null
 var _my_hero_id := ""
 var _net_hero_id := ""
 var _bank: HeroVariantBank = null  # D22 cosmetic variants (data)
@@ -34,6 +36,7 @@ var _results: CanvasLayer = null
 func _ready() -> void:
 	randomize()
 	progression = load("res://content/progression.tres") as ProgressionConfig
+	coach_cfg = load("res://content/coach/coach.tres") as CoachConfig
 	profile = PlayerProfile.load(progression)
 	_bank = HeroVariantBank.load_bank()
 	if DisplayServer.get_name() == "headless":
@@ -99,6 +102,10 @@ func _on_net_ended(winner: int, score: Array, wtime: float, lost: bool,
 		info["achievements"] = info["level"].get("achievements_unlocked", [])
 		# D29: events completed by this match (cosmetic rewards only).
 		info["events"] = info["level"].get("events_completed", [])
+		# D32: post-match coach tips (authoritative stats only).
+		info["coach"] = Coach.tips(coach_cfg, row,
+				ids_m[mc] if mc < ids_m.size() else "tdm",
+				winner == _net_client.my_team, mvp == my_idx)
 	info["label"] = (ids_m[mc] if mc < ids_m.size() else "tdm").to_upper() \
 			+ "  ·  " + (ids_map[mp] if mp < ids_map.size() else "crossdocks").to_upper()
 	# D27: the map just played - the map-vote UI grays it out (anti-repeat).
@@ -267,6 +274,8 @@ func _on_world_event(name: String, data: Dictionary) -> void:
 				int(row[5]) if row.size() > 5 else 0, MatchConfig.mode_id)
 		info["achievements"] = info["level"].get("achievements_unlocked", [])
 		info["events"] = info["level"].get("events_completed", [])
+		info["coach"] = Coach.tips(coach_cfg, row, MatchConfig.mode_id,
+				winner == 0, mvp == my_idx)
 	info["label"] = MatchConfig.mode_id.to_upper() \
 			+ "  ·  " + MapRegistry.get_map(MatchConfig.map_id).short_name.to_upper()
 	info["last_map"] = MatchConfig.map_id
@@ -456,6 +465,29 @@ func _show_results(winner: int, score: Array, wtime: float, title_override := ""
 			evr.modulate = Color(0.9, 0.9, 0.95)
 			_results.add_child(evr)
 			y += 20.0
+	# D32: post-match coach tips (deterministic, authoritative stats).
+	var coach: Array = info.get("coach", [])
+	if coach.size() > 0:
+		var chh := Label.new()
+		chh.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		chh.text = "COACH"
+		chh.position = Vector2(vp.x * 0.5 - 230, y + 2)
+		chh.size = Vector2(460, 20)
+		chh.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		chh.add_theme_font_size_override("font_size", 15)
+		chh.modulate = Color(0.85, 0.75, 1.0)
+		_results.add_child(chh)
+		y += 24.0
+		for i in coach.size():
+			var clr := Label.new()
+			clr.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			clr.text = "*  " + str(coach[i])
+			clr.position = Vector2(vp.x * 0.5 - 230, y)
+			clr.size = Vector2(460, 20)
+			clr.add_theme_font_size_override("font_size", 13)
+			clr.modulate = Color(0.88, 0.88, 0.95)
+			_results.add_child(clr)
+			y += 19.0
 	# D26: the current seasonal cosmetic track (data; cosmetic-only).
 	var sname: String = SeasonBank.current_name()
 	if sname != "":
