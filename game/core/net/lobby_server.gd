@@ -241,6 +241,14 @@ func _on_vote(key: String, msg: Dictionary, kind: String = "mode") -> void:
 	if not ids.has(opt):
 		_send(key, {t = "err", reason = "bad " + kind + " " + opt})
 		return
+	# D27 (anti-repetition): the entry's current map is the just-played (or
+	# about-to-be-played) map - it does not re-enter the vote pool while any
+	# alternative remains (single-map pools fall back to the full list).
+	if kind == "map":
+		var lp := str(m.map)
+		if opt == lp and MapRegistry.rotation_pool(lp).size() > 0:
+			_send(key, {t = "err", reason = "repeat map " + opt + " (current)"})
+			return
 	var tally: Dictionary = m.votes if kind == "mode" else m.map_votes
 	var source: Dictionary = m.vote_source if kind == "mode" else m.map_vote_source
 	var weight_map: Dictionary = m.vote_weight if kind == "mode" else m.map_vote_weight
@@ -261,6 +269,8 @@ func _on_vote(key: String, msg: Dictionary, kind: String = "mode") -> void:
 			party_vote = true,
 		}
 		resp_pm[kind] = str(m.mode if kind == "mode" else m.map)
+		if kind == "map":
+			resp_pm.repeat = str(m.map)
 		_send(key, resp_pm)
 		return
 	# Last write wins: retract the previous vote (if any) with its own
@@ -282,6 +292,8 @@ func _on_vote(key: String, msg: Dictionary, kind: String = "mode") -> void:
 		decided = bool(m.decided if kind == "mode" else m.map_decided),
 	}
 	resp[kind] = str(m.mode if kind == "mode" else m.map)
+	if kind == "map":
+		resp.repeat = str(m.map)
 	_send(key, resp)
 
 func _leading(m: Dictionary, kind: String = "mode") -> String:

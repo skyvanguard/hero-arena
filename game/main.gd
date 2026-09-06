@@ -98,6 +98,8 @@ func _on_net_ended(winner: int, score: Array, wtime: float, lost: bool,
 	var mp: int = _net_client._map_code if _net_client != null else 0
 	info["label"] = (ids_m[mc] if mc < ids_m.size() else "tdm").to_upper() \
 			+ "  ·  " + (ids_map[mp] if mp < ids_map.size() else "crossdocks").to_upper()
+		# D27: the map just played - the map-vote UI grays it out (anti-repeat).
+		info["last_map"] = ids_map[mp] if mp < ids_map.size() else "crossdocks"
 	# D20: next-match mode vote (lobby-assigned matches only; offline has
 	# no lobby to vote against).
 	if _net_match_id > 0 and DisplayServer.get_name() != "headless":
@@ -263,6 +265,7 @@ func _on_world_event(name: String, data: Dictionary) -> void:
 		info["achievements"] = info["level"].get("achievements_unlocked", [])
 	info["label"] = MatchConfig.mode_id.to_upper() \
 			+ "  ·  " + MapRegistry.get_map(MatchConfig.map_id).short_name.to_upper()
+		info["last_map"] = MatchConfig.map_id
 	_show_results(winner, sc, wtime, "", info)
 
 ## Results overlay v1 (D19): VICTORY/DEFEAT/DRAW + final score + duration
@@ -503,6 +506,12 @@ func _show_results(winner: int, score: Array, wtime: float, title_override := ""
 			vb2.add_theme_font_size_override("font_size", 13)
 			var mopt := str(map_ids[i])
 			vb2.pressed.connect(func() -> void: _cast_map_vote(mopt))
+			# D27: the map just played is grayed out - the lobby rejects it as
+			# a repeat while alternatives remain.
+			if mopt == str(info.get("last_map", "")):
+				vb2.disabled = true
+				vb2.modulate = Color(0.45, 0.48, 0.55)
+				vb2.text = vb2.text + " (last)"
 			_results.add_child(vb2)
 		_map_vote_status = Label.new()
 		_map_vote_status.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -570,7 +579,11 @@ func _on_vote_result(info: Dictionary) -> void:
 func _on_map_vote_result(info: Dictionary) -> void:
 	if _map_vote_status == null:
 		return
-	_map_vote_status.text = _format_vote_status(info, MapRegistry.ids(), "map")
+	var txt: String = _format_vote_status(info, MapRegistry.ids(), "map")
+	var rep: String = str(info.get("repeat", ""))
+	if rep != "":
+		txt += "   ·   " + rep.to_upper() + " was just played"
+	_map_vote_status.text = txt
 	if bool(info.get("decided", false)):
 		_map_vote_status.modulate = Color(1.0, 0.85, 0.4)
 

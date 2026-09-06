@@ -23,7 +23,8 @@ extends RefCounted
 ##   client -> lobby: mapvote {match_id, map, [party_id, party_size, leader]}
 ##                    (D21: vote the NEXT match map; same rules as vote)
 ##   lobby -> client: mapvoteresult {match_id, tally, leading, decided, map,
-##                    [party_vote]}
+##                    repeat (D27: the entry's current map - excluded from
+##                    the vote pool), [party_vote]}
 ##
 ## D20/D21/D23 voting (protocol v1.5): the lobby tallies votes per match in
 ## two independent domains (mode, map); a STRICT WEIGHTED MAJORITY (winner*2
