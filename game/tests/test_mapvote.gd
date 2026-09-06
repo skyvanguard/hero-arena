@@ -1,6 +1,7 @@
 extends Node
 ## Next-match MAP voting suite (Phase 6, round 35, D21): same lobby, same
-## rules, second domain. 12 checks: reg carries the host map, bad-map votes
+## rules, second domain. 17 checks (round 44, D27 anti-repetition added):
+## reg carries the host map, bad-map votes
 ## ignored, one map vote per peer (last write wins), mode and map tallies
 ## are independent per peer, split map votes hold, strict majority flips
 ## the directory map + forwards setmap to the match server, the pending
@@ -149,12 +150,18 @@ func _run() -> void:
 			int(lobby.matches[match_id].votes.get("capture", 0)) == 1
 			and int(lobby.matches[match_id].map_votes.get("foundry", 0)) == 1,
 			"mode=%s map=%s" % [str(lobby.matches[match_id].votes), str(lobby.matches[match_id].map_votes)])
-	voter_a.map_vote(match_id, "crossdocks")  # 6: switch map vote
+	voter_a.map_vote(match_id, "crossdocks")  # 6a: D27 - the current map is a repeat
+	await _wait_flag([false], 0.4)
+	check("mapvote D27: the current map cannot be re-voted (anti-repeat)",
+			int(lobby.matches[match_id].map_votes.get("crossdocks", 0)) == 0
+			and int(lobby.matches[match_id].map_votes.get("foundry", 0)) == 1,
+			"%s" % str(lobby.matches[match_id].map_votes))
+	voter_a.map_vote(match_id, "sawmill")  # 6: switch map vote
 	var r6 := await _wait_mapvote(voter_a)
 	check("mapvote: switching votes moves the count",
-			int(lobby.matches[match_id].map_votes.get("crossdocks", 0)) == 1
+			int(lobby.matches[match_id].map_votes.get("sawmill", 0)) == 1
 			and int(lobby.matches[match_id].map_votes.get("foundry", 0)) == 0
-			and str(r6.get("leading", "")) == "crossdocks",
+			and str(r6.get("leading", "")) == "sawmill",
 			"%s" % str(r6))
 	voter_b.map_vote(match_id, "foundry")  # 7: 1-1 split -> no decision
 	var r7 := await _wait_mapvote(voter_b)
@@ -219,6 +226,36 @@ func _run() -> void:
 	check("mapvote: state heartbeat updates the directory map",
 			str(lobby.matches[match_id].map) == "foundry",
 			str(lobby.matches[match_id].map))
+	# 12: D27 anti-repetition continues after the decision: foundry is now
+	#     the entry map (just played / about to play) and is excluded.
+	voter_b.map_vote(match_id, "foundry")
+	await _wait_flag([false], 0.4)
+	check("mapvote D27: voting for the just-played map is rejected after a decision",
+			int(lobby.matches[match_id].map_votes.get("foundry", 0)) == 2,
+			"%s" % str(lobby.matches[match_id].map_votes))
+	# 13: D27 rotation: the previously played map (crossdocks) becomes
+	#     votable again; the ack carries the repeat marker.
+	voter_b.map_vote(match_id, "crossdocks")
+	var r13 := await _wait_mapvote(voter_b)
+	check("mapvote D27: the older map becomes votable again (rotation)",
+			int(lobby.matches[match_id].map_votes.get("crossdocks", 0)) == 1
+			and int(lobby.matches[match_id].map_votes.get("foundry", 0)) == 1
+			and str(r13.get("repeat", "")) == "foundry",
+			"%s" % str(r13))
+	# 14: D27: the repeat gate applies to weighted party votes too.
+	voter_b.map_vote(match_id, "foundry", "p9", 3, true)
+	await _wait_flag([false], 0.4)
+	check("mapvote D27: a party leader's repeat vote is rejected too",
+			int(lobby.matches[match_id].map_votes.get("foundry", 0)) == 1,
+			"%s" % str(lobby.matches[match_id].map_votes))
+	# 15: D27: the rotation_pool helper (exclude + single-map fallback).
+	var pool: Array = MapRegistry.rotation_pool("crossdocks")
+	var pool0: Array = MapRegistry.rotation_pool("")
+	var solo: Array = MapRegistry.rotation_pool("solo", ["solo"])
+	check("mapvote D27: rotation_pool excludes the map, falls back when solo",
+			pool.size() == 3 and not pool.has("crossdocks")
+			and pool0.size() == MapRegistry.ids().size() and solo == ["solo"],
+			"%s" % str([pool, pool0, solo]))
 	_finish()
 
 func _finish() -> void:

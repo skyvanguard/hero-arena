@@ -194,12 +194,12 @@ func _run() -> void:
 	# The second entity arrives: a lone solo dissenter. The party's weight
 	# (2) beats the solo (1) - 2-1 weighted, strict at total 3.
 	var solo_a := await _client()
-	solo_a.map_vote(id_a, "crossdocks")
+	solo_a.map_vote(id_a, "sawmill")  # D27: crossdocks is the entry map (repeat)
 	var rs := await _wait_mapvote(solo_a)
 	check("party: a party of 2 tips a 1-solo lobby 2-1 (setmap forwarded)",
 			bool(rs.get("decided", false))
 			and int(rs.tally.get("foundry", 0)) == 2
-			and int(rs.tally.get("crossdocks", 0)) == 1
+			and int(rs.tally.get("sawmill", 0)) == 1
 			and str(lobby.matches[id_a].map) == "foundry"
 			and str((_nets[GPORT_A].net)._pending_map) == "foundry",
 			"%s" % str(rs))
@@ -221,23 +221,23 @@ func _run() -> void:
 	# 8-10: match B's map domain - weighted hold, re-vote moves the weight,
 	# clamping + sticky decided.
 	var p3b := await _client()
-	p3b.map_vote(id_b, "crossdocks", "P3", 3, true)
+	p3b.map_vote(id_b, "sawmill", "P3", 3, true)  # D27: crossdocks is the entry map
 	var r8a := await _wait_mapvote(p3b)
 	p2.map_vote(id_b, "foundry", "P2", 2, true)
 	var r8b := await _wait_mapvote(p2)
 	check("party: weighted 3 vs 2 decides the map domain too (setmap forwarded)",
 			bool(r8b.get("decided", false))
-			and str(lobby.matches[id_b].map) == "crossdocks"
-			and str((_nets[GPORT_B].net)._pending_map) == "crossdocks",
+			and str(lobby.matches[id_b].map) == "sawmill"
+			and str((_nets[GPORT_B].net)._pending_map) == "sawmill",
 			"%s" % str(r8b))
 
 	# 9: a leader re-vote moves the whole weight (match B map, now decided
 	# for crossdocks - re-voting keeps decided sticky but moves the tally).
 	p3b.map_vote(id_b, "foundry", "P3", 3, true)
 	var r9 := await _wait_mapvote(p3b)
-	check("party: a leader re-vote moves the full weight (3 crossdocks -> foundry)",
+	check("party: a leader re-vote moves the full weight (3 sawmill -> foundry)",
 			int(r9.tally.get("foundry", 0)) == 5
-			and int(r9.tally.get("crossdocks", 0)) == 0
+			and int(r9.tally.get("sawmill", 0)) == 0
 			and bool(r9.get("decided", false)),
 			"%s" % str(r9))
 
@@ -250,7 +250,7 @@ func _run() -> void:
 			int(r10.tally.get("crossdocks", 0)) == 6
 			and int(r10.tally.get("foundry", 0)) == 5
 			and bool(r10.get("decided", false))
-			and str(lobby.matches[id_b].map) == "crossdocks",
+			and str(lobby.matches[id_b].map) == "sawmill",
 			"%s" % str(r10))
 
 	# 11: solo + party mix on match C's mode domain: one solo (1 entity)
@@ -349,10 +349,10 @@ func _run() -> void:
 
 	# 14: a v1-shape solo vote (no party keys) adds exactly weight 1.
 	var s1 := await _client()
-	s1.map_vote(id_d, "crossdocks")
+	s1.map_vote(id_d, "foundry")  # D27: crossdocks is entry D's map (repeat)
 	var r14 := await _wait_mapvote(s1)
 	check("compat: a v1-shape solo vote adds exactly weight 1",
-			int(r14.tally.get("crossdocks", 0)) == 1
+			int(r14.tally.get("foundry", 0)) == 1
 			and not bool(r14.get("party_vote", false)),
 			"%s" % str(r14))
 
