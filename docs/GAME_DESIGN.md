@@ -362,6 +362,42 @@ variant). Adding/retiring an event is a content change; inactive events
 stay in the bank as history. The results overlay shows
 "EVENTS COMPLETE" rows for events finished by the just-ended match.
 
+## Custom matches (Phase 8, D35) — private servers & room codes
+
+The dedicated server can host a **private match**: it registers with the
+lobby marked `private` and asks for a **room code** — a 5-character
+human-readable token over an unambiguous alphabet (no 0/O/1/I; 30^5 ~= 24M
+codes, collision-checked at assignment). The lobby prints nothing; the
+server prints it:
+
+```
+SERVER ROOM CODE: QZ7KF  (join from a client with this code)
+```
+
+(docker: `docker logs heroarena-srv | grep ROOM CODE`). Any client types
+the code into the lobby panel of the hero select screen and presses JOIN:
+the lobby resolves code -> published address + live state (mode, map,
+team size, players, full) and the client connects straight to that server.
+No queue, no region, no matchmaking — the code is the invitation.
+
+Rules:
+
+- **Private matches never enter the public queue.** The 4-stage
+  win-probability queue (D28) skips them entirely; they are reachable only
+  by code. Public servers keep registering exactly as before (a `reg`
+  without `private`), so old clients and servers are wire-compatible.
+- **Codes are case-insensitive** when typed; the lobby normalizes.
+- **A code is released when its server drops** (reap or explicit
+  re-registration from the same published address) — a dead room can't be
+  joined, and the code space recycles.
+- **The room is a normal dedicated match**: bot fill, authoritative sim,
+  reconnect (D30) all behave as in public play; the lobby's room view
+  tracks live player count via the same `state` heartbeats.
+
+Hosting: `docker run ... heroarena/server res://net/server.tscn -- --port=7777 \
+--lobby=<lobby>:7790 --lip=<lan-ip> --room` (see docs/RELEASE.md).
+Wire detail: docs/NETWORKING.md §9 (roomjoin/roomjoinack).
+
 ## Passive tuning (Phase 7) — the full roster, verified in the pipeline
 
 Every hero's sub-role identity is a PASSIVE that is always on, data-driven

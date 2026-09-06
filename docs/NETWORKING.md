@@ -396,7 +396,7 @@ test_net_profiles verify it deterministically by dropping the reply path
   matched the client count exactly, so the pacing is server-confirmed). This
   is the strongest broadcast-leg evidence available without two physical
   phones; the real-WiFi two-phone sign-off remains the acceptance test.
-- Full battery: 33 headless suites, 605 checks (round-38 per-suite counts:
+- Full battery: 34 headless suites, 627 checks (round-38 per-suite counts: (roster is 64 since round 50: +7 for the vanta mod hero);
   hero 42 + main 16 + roster 57 + bots 23 + projectile 10 + practice 11 +
   map 12 + mode_control 15 (round 30) + mode_capture 17 + mode_escort 11
   (rounds 31-32) + net 10 + net_props 20 + net_sim 10 + net_profiles 30 +
@@ -414,6 +414,12 @@ test_net_profiles verify it deterministically by dropping the reply path
   one-shot grants, old-save compat, reward gating, D26 stat columns,
   seasonal cosmetic validation) + matchmaking_v2 14 (round 45; D28: win-probability model - MMConfig load, win_prob math, even-split projection + fairness gate, party-block grouping, live strict/v1 assignments with win_prob, SKILL-stage gate, REGION fair-preference, BOTFILL ordering, ledger decay, no stranding) + events 15 (round 46; D29: bank integrity + validate catches, exact participation threshold, single/multi mode filters, inactive events, one-shot, reward gating at mastery 1, cosmetic-only mastery, old 7-arg call sites, old-save compat + round-trip, view rows) + shop 13 (round 47; D31: bank + validate catches, data-driven gear earning, short-balance block, exact debit, one-shot, mastery-1 selectability, variant_unlocked, old-save compat + round-trip, grant_sources, UI rows) + mods 15 (round 50; D34: starter_pack acceptance + manifest, hero/map/balance/cosmetic drop-in, idempotency, api-version/id/missing-manifest rejections, override resolve + alphabetical precedence, unknown-override flag, validator clean + broken-mod catch) + coach 14 (round 48; D32: config sanity, aim/survival fire+suppress, MVP/streak/win positives, four distinct mode lines, unknown mode, budget + warnings-first ordering, clean-win output, short-row guards, no-hero-forcing over the full roster, determinism) + passives 25 (round 41; Phase 7 item 2: all six sub-role passives
   behavior-verified in the real pipeline + passive x perk x ult stacking)
+  + rooms 15 (round 51; D35 custom matches: room-code generation over the
+  unambiguous alphabet, --room CLI parse, private reg -> regack code,
+  roomjoinack ok/unknown/case-insensitive, live room state via state
+  heartbeats, public queue never assigns a private match, code release
+  on drop, same-key re-registration, bot-filled private world, and a
+  real ENet end-to-end join through the resolved room address)
   . Note: under heavy machine load several net suites flake (frame-based
   waits vs real-time SimLink latency). test_net_profiles and test_net_sim
   had a structural cause - a slot reply lost on a lossy link dead-ended the
@@ -468,7 +474,7 @@ reliability**:
   RECEIVED time, not the last pong: a stale pong would re-fire the connect
   branch forever (round-13 bug, fixed).
 
-### 9.2 Message types (lobby protocol v1.5, D20/D21/D23 voting)
+### 9.2 Message types (lobby protocol v1.6, D20/D21/D23 voting, D35 rooms)
 
 | Type | Dir | Seq | Notes |
 |---|---|---|---|
@@ -477,15 +483,39 @@ reliability**:
 | join{region,party,skill,name} | c->s | yes | Creates the waiter |
 | queue{stage,waited,open} | s->c | - | >=1 Hz while queued; doubles as keep-alive |
 | assign{host,port,match_id,region,name,mode,map,tally,leading,decided,map_tally,map_leading,map_decided,stage,win_prob (D28: join win-chance, -1 unknown),waited} | s->c | - | mode/map = the match's mode + map ids (D18: the queued client knows what it is joining); tally/leading/decided + map_* = the D20/D21 vote state (mode and map are independent tallies) |
-| reg{ip,port,region,team_size,name,mode,map} | s->s | yes | A game server registers its match (published address + mode D18 + map D21) |
-| regack{match_id} | s->s | - | |
+| reg{ip,port,region,team_size,name,mode,map,[private,room]} | s->s | yes | A game server registers its match (published address + mode D18 + map D21) |
+| regack{match_id,[code]} | s->s | - | D35: `code` present when the reg was private+room |
 | state{humans,over,mode,map} | s->s | - | Live match state (2 s heartbeat while the server is alive, so the entry survives the 5 s reap during long silent bot-only stretches); mode/map = what the server is actually running, so the directory reflects voted swaps at the next reset; ANY message from a match peer refreshes match liveness |
 | vote{match_id,mode,[party_id,party_size,leader]} | c->s | no | D20: vote the match's NEXT mode. Fire-and-forget; one vote per peer p |er match PER DOMAIN, last write wins (re-taps/retransmits never inflate) |
 | voteresult{match_id,tally,leading,decided,mode,[party_vote]} | s->c | - | D20/D23: ack with the running WEIGHTED tally; the deciding voter's own ack already shows decided=true; party_vote=true acks a non-leader member (no weight added) |
 | setmode{match_id,mode} | s->s | - | D20: a strict majority decided; forwarded to the registered match server, which stores it for the next in-place match reset (a live match never changes rules mid-fight) |
 | mapvote{match_id,map,[party_id,party_size,leader]} | c->s | no | D21/D23: vote the match's NEXT map; same rules as vote, independent weighted tally |
 | mapvoteresult{match_id,tally,leading,decided,map,repeat,[party_vote]} | s->c | - | D21/D23: ack with the running weighted map tally (party_vote as voteresult); D27: repeat = the entry's current map (excluded from the pool) |
-| setmap{match_id,map} | s->s | - | D21: a strict majority decided the map; the server rebuilds the arena (free old geometry, Arena.build) at the next in-place reset |
+| setmap{match_id,map} | s->s | - | D21: a strict majority decided the map; the server rebuilds the 
+| roomjoin{code} | c->s | no | D35: resolve a private room code (case-insensitive) |
+| roomjoinack{ok,code,host,port,match_id,region,name,mode,map,team_size,humans,over,full} / {ok,err} | s->c | - | D35: the resolved room + live state, or a readable error |arena (free old geometry, Arena.build) at the next in-place reset |
+
+### 9.2a Custom matches & room codes (D35, round 51)
+
+- **Shape**: `reg` gains two OPTIONAL booleans (`private`, `room`); `regack`
+  gains an optional `code`. Two new message types (`roomjoin` / `roomjoinack`).
+  Everything is additive - a v1.5 client/server is wire-compatible (no new
+  field is ever required), which is why the public queue flow is untouched.
+- **Codes**: 5 chars over a 30-letter unambiguous alphabet (no 0/O/1/I),
+  generated by the LOBBY (collision-checked; ~24M space), stored in the
+  lobby's `rooms` table as code -> match_id, and released on
+  `match_dropped` (reap or same-key re-registration). Clients type codes
+  case-insensitively; the lobby normalizes to the canonical form.
+- **Queue exclusion**: the D28 candidate walk skips `private` matches,
+  so a custom match is reachable only by code - the code IS the invitation.
+- **Live state**: the room view reuses the existing `state` heartbeats
+  (humans/over), so roomjoinack always reports the current player count
+  and the full flag without any new server-side channel.
+- **Server UX**: `--room` on the dedicated server (CLI parse is the pure
+  `ServerMain.parse_args`) registers private+room and prints
+  `SERVER ROOM CODE: <code>` for the operator. Client UX: a room-code field
+  + JOIN in the hero-select lobby panel, deploying through the same
+  `net_deployed` path as a queue assign.
 
 ### 9.2a Next-match mode + map voting (D20/D21, rounds 34-35)
 

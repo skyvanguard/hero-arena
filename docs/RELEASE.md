@@ -52,7 +52,21 @@ docker run -d heroarena/server res://net/server.tscn -- --port=7777 \
     --lregion=latam_saopaulo --lname=demo           # register with a lobby
                                                      # (the address players
                                                      # see = --lip, the LAN IP)
+docker run -d heroarena/server res://net/server.tscn -- --port=7777 \
+    --lobby=<lobby-ip>:7790 --lip=<this-host-lan-ip> --room
+                                                     # D35 PRIVATE MATCH:
+                                                     # lobby-assigned room
+                                                     # code; players join by
+                                                     # typing it in the hero
+                                                     # select lobby panel.
+                                                     # Read it with:
+                                                     #   docker logs -f heroarena-srv | grep ROOM CODE
 ```
+
+`--room` implies the lobby registration (combine with `--lobby=`). The
+server prints `SERVER ROOM CODE: <code>` once the lobby assigns it; the
+match is bot-filled exactly like a public one but never appears in the
+public queue.
 
 **Relay mode** (NAT traversal; one per region is plenty for v1):
 
