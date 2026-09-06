@@ -30,11 +30,15 @@ static func color_for(bank: HeroVariantBank, profile: PlayerProfile,
 	if prog == null:
 		return s.color_of(0, fallback)
 	var unlocked := s.unlocked_count(profile.mastery_level_of(prog, hero_id)) - 1
-	# D26: achievement variant unlocks are cosmetic early access - the
-	# effective cap is the max of the mastery gate and the granted variants.
+	# D26/D29: achievement + event variant unlocks are cosmetic early
+	# access - the effective cap is the max of the mastery gate and every
+	# granted variant (achievements and events).
 	var granted: Array = profile.ach_variant_unlocks.get(hero_id, [])
 	for i in granted.size():
 		unlocked = maxi(unlocked, int(granted[i]))
+	var egranted: Array = profile.event_variant_unlocks.get(hero_id, [])
+	for i in egranted.size():
+		unlocked = maxi(unlocked, int(egranted[i]))
 	var idx: int = profile.selected_variant(hero_id)
 	return s.color_of(mini(idx, unlocked), fallback)
 

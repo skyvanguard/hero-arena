@@ -27,6 +27,13 @@ var achievements: Dictionary = {}
 ## early access; the mastery gate still applies on top - the variant bank
 ## takes the max of both).
 var ach_variant_unlocks: Dictionary = {}
+## D29: event id -> int (progress toward the event goal).
+var event_progress: Dictionary = {}
+## D29: event id -> true (one-shot; an event never completes twice).
+var event_done: Dictionary = {}
+## D29: hero_id -> Array[variant_idx] unlocked by events (cosmetic early
+## access; the variant bank takes the max of mastery + ach + event grants).
+var event_variant_unlocks: Dictionary = {}
 ## D24 control customization (ControlSettings.to_dict(); old saves default
 ## {} = stock layout).
 var controls: Dictionary = {}
@@ -55,6 +62,10 @@ static func load(cfg: ProgressionConfig) -> PlayerProfile:
 			p.best_streak = int(d.get("best_streak", 0))
 			p.achievements = d.get("achievements", {})
 			p.ach_variant_unlocks = d.get("ach_variant_unlocks", {})
+			# Old saves (pre-D29) have no event blocks - defaults win.
+			p.event_progress = d.get("event_progress", {})
+			p.event_done = d.get("event_done", {})
+			p.event_variant_unlocks = d.get("event_variant_unlocks", {})
 	return p
 
 ## Test helper: serialize this profile straight to the save path without
@@ -68,19 +79,23 @@ func save() -> void:
 		"variants": variants, "controls": controls,
 		"total_kills": total_kills, "total_headshots": total_headshots,
 		"total_mvp": total_mvp, "best_streak": best_streak,
-		"achievements": achievements, "ach_variant_unlocks": ach_variant_unlocks}
+		"achievements": achievements, "ach_variant_unlocks": ach_variant_unlocks,
+		"event_progress": event_progress, "event_done": event_done,
+		"event_variant_unlocks": event_variant_unlocks}
 	var f := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
 	if f != null:
 		f.store_string(JSON.stringify(d))
 		f.close()
 
 ## Apply one finished match. headshots/match_streak are D26 (achievement
-## counters); they default so pre-D26 call sites keep working. Returns
-## {xp_gained, level_before, level_after, achievements_unlocked} for the
-## results screen ("+XP" / "LEVEL UP!" / "*NEW* achievement").
+## counters); they default so pre-D26 call sites keep working. mode_id is
+## D29 (event mode filters); it defaults to "" (old call sites: events
+## with a mode filter simply do not count them). Returns
+## {xp_gained, level_before, level_after, achievements_unlocked,
+## events_completed} for the results screen.
 func apply_match(cfg: ProgressionConfig, hero_id: String, won: bool,
 		kills: int, is_mvp: bool, headshots: int = 0,
-		match_streak: int = 0) -> Dictionary:
+		match_streak: int = 0, mode_id: String = "") -> Dictionary:
 	var gained := (cfg.xp_win if won else cfg.xp_lose) \
 			+ float(kills) * cfg.xp_kill \
 			+ (cfg.xp_mvp if is_mvp else 0.0)
@@ -106,9 +121,11 @@ func apply_match(cfg: ProgressionConfig, hero_id: String, won: bool,
 		level += 1
 	# D26: one-shot achievement evaluation (cosmetic rewards only).
 	var unlocked: Array = AchievementBank.newly_unlocked(self)
+	# D29: event progress + one-shot completions (cosmetic rewards only).
+	var events := EventBank.events_completed(self, won, is_mvp, mode_id)
 	save()
 	return {"xp_gained": gained, "level_before": before, "level_after": level,
-		"achievements_unlocked": unlocked}
+		"achievements_unlocked": unlocked, "events_completed": events}
 
 ## D22: select a cosmetic variant (index 0 = the hero's default color).
 ## The UI validates the unlock; the accessor clamps defensively.

@@ -1,0 +1,41 @@
+[gd_resource type="Resource" script_class="EventBank" load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://core/progression/event_bank.gd" id="1_ev"]
+[ext_resource type="Script" path="res://core/progression/event_data.gd" id="2_ev"]
+
+[sub_resource type="Resource" id="Resource_forge"]
+script = ExtResource("2_ev")
+id = "forge_week"
+display_name = "Forge Week"
+desc = "Play 10 matches"
+goal_kind = 0
+goal_target = 10
+modes = []
+reward_hero = "bastion"
+reward_variant = 2
+
+[sub_resource type="Resource" id="Resource_capture"]
+script = ExtResource("2_ev")
+id = "capture_push"
+display_name = "Capture Push"
+desc = "Win 5 Capture matches"
+goal_kind = 1
+goal_target = 5
+modes = PackedStringArray("capture")
+reward_hero = "blitz"
+reward_variant = 2
+
+[sub_resource type="Resource" id="Resource_objective"]
+script = ExtResource("2_ev")
+id = "objective_sprint"
+display_name = "Objective Sprint"
+desc = "Be MVP 3 times on an objective mode"
+goal_kind = 2
+goal_target = 3
+modes = PackedStringArray("control", "capture", "escort")
+reward_hero = "mira"
+reward_variant = 2
+
+[resource]
+script = ExtResource("1_ev")
+events = Array[Resource]([SubResource("Resource_forge"), SubResource("Resource_capture"), SubResource("Resource_objective")])

@@ -84,18 +84,21 @@ func _on_net_ended(winner: int, score: Array, wtime: float, lost: bool,
 			nm = _net_client._views[int(i)].display_name
 		info["names"].append(nm + ("  (you)" if i == my_idx else ""))
 	var mvp: int = World.mvp_index(stats)
+	var ids_m: Array = ModeRegistry.ids()
+	var ids_map: Array = MapRegistry.ids()
+	var mc: int = _net_client._mode_code if _net_client != null else 0
+	var mp: int = _net_client._map_code if _net_client != null else 0
 	if my_idx >= 0 and stats.size() > my_idx:
 		var row: Array = stats[my_idx]
 		info["level"] = profile.apply_match(progression, _net_client.my_hero_id,
 				winner == _net_client.my_team, int(row[1]), mvp == my_idx,
 				int(row[4]) if row.size() > 4 else 0,
-				int(row[5]) if row.size() > 5 else 0)
+				int(row[5]) if row.size() > 5 else 0,
+				ids_m[mc] if mc < ids_m.size() else "tdm")
 		# D26: newly unlocked achievements (cosmetic rewards only).
 		info["achievements"] = info["level"].get("achievements_unlocked", [])
-	var ids_m: Array = ModeRegistry.ids()
-	var ids_map: Array = MapRegistry.ids()
-	var mc: int = _net_client._mode_code if _net_client != null else 0
-	var mp: int = _net_client._map_code if _net_client != null else 0
+		# D29: events completed by this match (cosmetic rewards only).
+		info["events"] = info["level"].get("events_completed", [])
 	info["label"] = (ids_m[mc] if mc < ids_m.size() else "tdm").to_upper() \
 			+ "  ·  " + (ids_map[mp] if mp < ids_map.size() else "crossdocks").to_upper()
 	# D27: the map just played - the map-vote UI grays it out (anti-repeat).
@@ -261,8 +264,9 @@ func _on_world_event(name: String, data: Dictionary) -> void:
 		info["level"] = profile.apply_match(progression, _my_hero_id, winner == 0,
 				int(row[1]), mvp == my_idx,
 				int(row[4]) if row.size() > 4 else 0,
-				int(row[5]) if row.size() > 5 else 0)
+				int(row[5]) if row.size() > 5 else 0, MatchConfig.mode_id)
 		info["achievements"] = info["level"].get("achievements_unlocked", [])
+		info["events"] = info["level"].get("events_completed", [])
 	info["label"] = MatchConfig.mode_id.to_upper() \
 			+ "  ·  " + MapRegistry.get_map(MatchConfig.map_id).short_name.to_upper()
 	info["last_map"] = MatchConfig.map_id
@@ -427,6 +431,30 @@ func _show_results(winner: int, score: Array, wtime: float, title_override := ""
 			ar.add_theme_font_size_override("font_size", 14)
 			ar.modulate = Color(0.9, 0.9, 0.95)
 			_results.add_child(ar)
+			y += 20.0
+	# D29: events completed by this match (cosmetic rewards only).
+	var evc: Array = info.get("events", [])
+	if evc.size() > 0:
+		var evh := Label.new()
+		evh.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		evh.text = "EVENTS COMPLETE"
+		evh.position = Vector2(vp.x * 0.5 - 230, y + 2)
+		evh.size = Vector2(460, 20)
+		evh.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		evh.add_theme_font_size_override("font_size", 15)
+		evh.modulate = Color(0.6, 0.95, 0.7)
+		_results.add_child(evh)
+		var evrows: Array = EventBank.view_rows(evc)
+		y += 24.0
+		for i in evrows.size():
+			var evr := Label.new()
+			evr.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			evr.text = str(evrows[i])
+			evr.position = Vector2(vp.x * 0.5 - 230, y)
+			evr.size = Vector2(460, 20)
+			evr.add_theme_font_size_override("font_size", 14)
+			evr.modulate = Color(0.9, 0.9, 0.95)
+			_results.add_child(evr)
 			y += 20.0
 	# D26: the current seasonal cosmetic track (data; cosmetic-only).
 	var sname: String = SeasonBank.current_name()
