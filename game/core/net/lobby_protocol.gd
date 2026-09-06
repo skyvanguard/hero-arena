@@ -10,10 +10,16 @@ extends RefCounted
 ##   lobby -> client: hello {region, matches, waiters}, pong,
 ##                    queue {stage, waited, open}, assign {host, port, ...,
 ##                    win_prob (D28: join win-chance estimate, -1 unknown)}
-##   match -> lobby:  reg {ip, port, region, team_size, name, mode, map},
+##   match -> lobby:  reg {ip, port, region, team_size, name, mode, map,
+##                         private (D35), room (D35: request a room code)},
 ##                    state {humans, over, mode, map}, hb
-##   lobby -> match:  regack {match_id}, setmode {match_id, mode} (D20),
+##   lobby -> match:  regack {match_id, [code (D35: the assigned room code)]},
+##                    setmode {match_id, mode} (D20),
 ##                    setmap {match_id, map} (D21)
+##   client -> lobby: roomjoin {code} (D35: resolve a private room code)
+##   lobby -> client: roomjoinack {ok, code, host, port, match_id, region,
+##                    name, mode, map, team_size, humans, over, full}
+##                    (ok=false: {ok, err})
 ##   client -> lobby: vote {match_id, mode, [party_id, party_size, leader]}
 ##                    (D20: vote the NEXT match mode; one vote per peer per
 ##                    match, last write wins; D23: optional party bundle -
@@ -59,6 +65,27 @@ const T_SETMODE := "setmode"
 const T_MAPVOTE := "mapvote"
 const T_MAPVOTERESULT := "mapvoteresult"
 const T_SETMAP := "setmap"
+const T_ROOMJOIN := "roomjoin"      # D35: resolve a private room code
+const T_ROOMJOINACK := "roomjoinack" # D35: the resolved room (ok/err)
+
+## D35 room codes: 5 chars from an unambiguous alphabet (no 0/O/1/I) -
+## 30^5 ~= 24M codes; the lobby checks collisions at assignment time.
+const ROOM_ALPHABET := "23456789ABCDEFGHJKMNPQRSTVWXYZ"
+const ROOM_LEN := 5
+
+static func gen_room_code(rnd: RandomNumberGenerator) -> String:
+	var out := ""
+	for i in ROOM_LEN:
+		out += ROOM_ALPHABET[rnd.randi_range(0, ROOM_ALPHABET.length() - 1)]
+	return out
+
+static func is_room_code(c: String) -> bool:
+	if c.length() != ROOM_LEN:
+		return false
+	for i in c.length():
+		if ROOM_ALPHABET.find(c[i]) < 0:
+			return false
+	return true
 
 const QUEUE_STAGE_STRICT := 1
 const QUEUE_STAGE_SKILL := 2

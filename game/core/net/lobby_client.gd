@@ -23,6 +23,7 @@ signal pong(rtt_ms: float)
 signal queue(info: Dictionary)
 signal assign(info: Dictionary)
 signal regack(info: Dictionary)
+signal roomjoinack(info: Dictionary)  # D35: a room code was resolved
 signal vote_result(info: Dictionary)
 signal setmode(info: Dictionary)  # match servers: a vote decided the mode
 signal map_vote_result(info: Dictionary)
@@ -73,7 +74,8 @@ func setup(h: String, p: int) -> void:
 ## authoritative once connected).
 func register_match(ip: String, game_port: int, region: String,
 		team_size: int, name: String, mode: String = "tdm",
-		map: String = "") -> void:
+		map: String = "", private: bool = false,
+		want_code: bool = false) -> void:
 	if _seq_reg > 0 and not _pending_reg.is_empty():
 		return  # already registered / in flight
 	_seq_reg += 1
@@ -82,6 +84,10 @@ func register_match(ip: String, game_port: int, region: String,
 			mode = mode}
 	if map != "":
 		m.map = map
+	if private:  # D35: custom match (never offered by the public queue)
+		m.private = true
+		if want_code:  # ask the lobby for a room code
+			m.room = true
 	_pending_reg = {msg = m, next_at = Time.get_ticks_msec()}
 	_put(m)
 
@@ -94,6 +100,10 @@ func join_queue(region: String, party: int, skill: int, name: String) -> void:
 	_pending_join = {msg = m, next_at = now, last_ack_at = now,
 			started_at = now, params = [region, party, skill, name]}
 	_put(m)
+
+## D35: resolve a private room code (the lobby answers roomjoinack).
+func join_room(code: String) -> void:
+	_put({t = LobbyProtocol.T_ROOMJOIN, code = code.strip_edges().to_upper()})
 
 func send_state(humans: int, over: bool, mode := "", map := "") -> void:
 	_put({t = LobbyProtocol.T_STATE, humans = humans, over = over,
@@ -214,6 +224,8 @@ func _dispatch(msg: Dictionary) -> void:
 	elif t == LobbyProtocol.T_REGACK:
 		_pending_reg = {}
 		regack.emit(msg)
+	elif t == LobbyProtocol.T_ROOMJOINACK:  # D35
+		roomjoinack.emit(msg)
 	elif t == LobbyProtocol.T_VOTERESULT:
 		vote_result.emit(msg)
 	elif t == LobbyProtocol.T_SETMODE:

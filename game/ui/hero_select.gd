@@ -25,6 +25,8 @@ var _lob: LobbyClient = null
 var _lob_region_btn: Button = null
 var _lob_status: Label = null
 var _lob_play_btn: Button = null
+var _room_edit: LineEdit = null  # D35: private room code input
+var _room_join_btn: Button = null
 var _lob_region_idx := 0
 var _lob_in_queue := false
 ## D19: local cosmetic progression (main.gd passes the loaded profile + the
@@ -586,6 +588,22 @@ func _make_online_row(vp: Vector2) -> void:
 	_lob_play_btn.add_theme_font_size_override("font_size", 13)
 	_lob_play_btn.pressed.connect(_on_play_online)
 	add_child(_lob_play_btn)
+	# D35: custom matches - enter a private room code (the dedicated server
+	# prints its code with --room; the lobby resolves code -> address).
+	_room_edit = LineEdit.new()
+	_room_edit.placeholder_text = "ROOM CODE (5)"
+	_room_edit.max_length = LobbyProtocol.ROOM_LEN
+	_room_edit.position = Vector2(panel_x, row_y + 2.0 * (row_h + 24.0) + 6.0)
+	_room_edit.size = Vector2(panel_w * 0.62, row_h)
+	_room_edit.add_theme_font_size_override("font_size", 12)
+	add_child(_room_edit)
+	_room_join_btn = Button.new()
+	_room_join_btn.text = "JOIN"
+	_room_join_btn.position = Vector2(panel_x + panel_w * 0.66, row_y + 2.0 * (row_h + 24.0) + 6.0)
+	_room_join_btn.size = Vector2(panel_w * 0.34 - 4.0, row_h)
+	_room_join_btn.add_theme_font_size_override("font_size", 11)
+	_room_join_btn.pressed.connect(_on_room_join)
+	add_child(_room_join_btn)
 	_setup_lobby()
 
 ## Lobby address: the emulator reaches the host via 10.0.2.2 (NAT); desktop /
@@ -599,6 +617,7 @@ func _setup_lobby() -> void:
 	_lob.pong.connect(_on_lob_pong)
 	_lob.queue.connect(_on_lob_queue)
 	_lob.assign.connect(_on_lob_assign)
+	_lob.roomjoinack.connect(_on_room_joinack)  # D35
 	add_child(_lob)
 	_lob.setup(host, MatchConfig.lobby_port)
 
@@ -649,6 +668,32 @@ func _on_lob_assign(info: Dictionary) -> void:
 		# match_id (D20): the lobby's id of this match - the results screen
 		# votes the NEXT match's mode against it.
 		net_deployed.emit(host_port, _hero, int(info.get("match_id", 0)))
+
+## D35: join a private match by room code.
+func _on_room_join() -> void:
+	if _lob_in_queue:
+		return
+	var code := _room_edit.text.strip_edges().to_upper()
+	if not LobbyProtocol.is_room_code(code):
+		_lob_status.text = "code: " + str(LobbyProtocol.ROOM_LEN) + " chars (no 0/O/1/I)"
+		_lob_status.modulate = Color(0.9, 0.55, 0.5)
+		return
+	_lob_status.text = "resolving " + code + "\u2026"
+	_lob_status.modulate = Color(0.95, 0.8, 0.4)
+	_lob.join_room(code)
+
+func _on_room_joinack(info: Dictionary) -> void:
+	if bool(info.get("ok", false)):
+		var hp := str(info.get("host")) + ":" + str(info.get("port"))
+		var mode_s: String = str(info.get("mode", "tdm"))
+		_lob_status.text = "room " + str(info.get("code")) + " @ " + hp + "  [" + mode_s + "]"
+		_lob_status.modulate = Color(0.55, 0.85, 0.55)
+		_lob_play_btn.text = "PLAY"
+		if _hero != null:
+			net_deployed.emit(hp, _hero, int(info.get("match_id", 0)))
+	else:
+		_lob_status.text = str(info.get("err", "room not found"))
+		_lob_status.modulate = Color(0.9, 0.55, 0.5)
 
 func _on_play_online() -> void:
 	if _lob_in_queue:

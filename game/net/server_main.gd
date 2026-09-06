@@ -1,3 +1,4 @@
+class_name ServerMain
 extends Node
 ## Dedicated headless match server scene (Phase 5): same codebase, 60 Hz
 ## authoritative World, ENet transport. Run:
@@ -20,28 +21,45 @@ var _accum := 0.0
 var _lob_last_humans := -1
 var _lob_last_over := false
 var _lob_state_acc := 0.0
+var _room := false  # D35: --room (private match + room code)
 var _ctllog := false  # --ctllog: print control-point state every 10 s (ops/debug)
 var _ctllog_n := 0
+
+## D35: the CLI parse is a pure function (unit-testable); mode/map are
+## applied to MatchConfig by the caller.
+static func parse_args(args: Array) -> Dictionary:
+	var out := {port = MatchConfig.net_port, dport = MatchConfig.net_discovery_port,
+			mode = "", map = "", relay = "", ctllog = false, room = false}
+	for a in args:
+		if a.begins_with("--port="):
+			out.port = int(a.substr(7))
+		elif a.begins_with("--dport="):
+			out.dport = int(a.substr(8))
+		elif a.begins_with("--mode="):
+			out.mode = a.substr(7)   # ModeRegistry.ids()
+		elif a.begins_with("--map="):
+			out.map = a.substr(6)    # MapRegistry.ids()
+		elif a == "--ctllog":
+			out.ctllog = true
+		elif a == "--room":  # D35: private match + lobby-assigned room code
+			out.room = true
+		elif a.begins_with("--relay="):
+			out.relay = a.substr(8)
+	return out
 
 func _ready() -> void:
 	randomize()
 	HeroRegistry.heroes()  # D34: merge drop-in mod heroes before any roster read
-	var port := MatchConfig.net_port
-	var dport := MatchConfig.net_discovery_port
-	var relay_addr := ""
-	for a in OS.get_cmdline_user_args():
-		if a.begins_with("--port="):
-			port = int(a.substr(7))
-		elif a.begins_with("--dport="):
-			dport = int(a.substr(8))
-		elif a.begins_with("--mode="):
-			MatchConfig.mode_id = a.substr(7)  # ModeRegistry.ids()
-		elif a.begins_with("--map="):
-			MatchConfig.map_id = a.substr(6)   # MapRegistry.ids()
-		elif a == "--ctllog":
-			_ctllog = true
-		elif a.begins_with("--relay="):
-			relay_addr = a.substr(8)
+	var parsed := parse_args(OS.get_cmdline_user_args())
+	var port: int = int(parsed.port)
+	var dport: int = int(parsed.dport)
+	var relay_addr: String = str(parsed.relay)
+	if str(parsed.mode) != "":
+		MatchConfig.mode_id = str(parsed.mode)
+	if str(parsed.map) != "":
+		MatchConfig.map_id = str(parsed.map)
+	_ctllog = bool(parsed.ctllog)
+	_room = bool(parsed.room)
 	var size := clampi(MatchConfig.team_size, 1, 6)
 	world = World.new()
 	world.name = "World"
@@ -186,7 +204,14 @@ func _do_lobby_register() -> void:
 	var mode_f := world.mode.mode_id if world.mode != null else "tdm"
 	var map_f := MatchConfig.map_id
 	lob.connected_ok.connect(func() -> void:
-		lob.register_match(lip_f, port_f, lregion_f, size_f, lname_f, mode_f, map_f))
+		lob.register_match(lip_f, port_f, lregion_f, size_f, lname_f, mode_f,
+				map_f, _room, _room))  # D35: --room registers private + code
+	# D35: the lobby's room code - printed for the operator (docker logs /
+	# terminal) and joinable from any client via the room panel.
+	lob.regack.connect(func(i: Dictionary) -> void:
+		var c := str(i.get("code", ""))
+		if c != "":
+			print("SERVER ROOM CODE: " + c + "  (join from a client with this code)"))
 	print("SERVER lobby registration at %s (advertising %s:%d, region %s)" % [
 			lobby_addr, lip_f, port_f, lregion_f])
 

@@ -55,6 +55,10 @@ var _peers: Dictionary = {}
 var matches: Dictionary = {}
 ## waiters: peer key -> {region, party, skill, name, joined_at, last_queue_sent}
 var waiters: Dictionary = {}
+## D35 (custom matches): room codes -> match_id. A private match registers
+## with room=true and the lobby assigns a short code; players join by code.
+var rooms: Dictionary = {}
+var _rnd := RandomNumberGenerator.new()
 
 signal match_registered(info: Dictionary)
 signal match_dropped(match_id: int)
@@ -62,6 +66,8 @@ signal client_assigned(info: Dictionary)
 signal client_dropped()
 
 func setup(port: int, lobby_region: String, fill_after_s: float = 60.0) -> void:
+	_rnd.randomize()
+	match_dropped.connect(_on_match_dropped)
 	region = lobby_region
 	# D28: data-driven queue windows (no magic numbers in the engine).
 	mm = MMConfig.load_config()
@@ -162,6 +168,22 @@ func _dispatch(key: String, msg: Dictionary) -> void:
 				joined_at = time,
 				last_queue_sent = -1.0,
 			}
+		LobbyProtocol.T_ROOMJOIN:
+			# D35: resolve a private room code to its server address + live
+				# state. Codes are case-insensitive (players type them any way).
+			var code := str(msg.get("code", "")).strip_edges().to_upper()
+			if rooms.has(code):
+				var m: Dictionary = matches[rooms[code]]
+				_send(key, {
+					t = LobbyProtocol.T_ROOMJOINACK, ok = true, code = code,
+					host = str(m.ip), port = int(m.port),
+					match_id = int(rooms[code]), region = str(m.region),
+					name = str(m.name), mode = str(m.mode), map = str(m.map),
+					team_size = int(m.team_size), humans = int(m.humans),
+					over = bool(m.over), full = int(m.humans) >= int(m.team_size)})
+			else:
+				_send(key, {t = LobbyProtocol.T_ROOMJOINACK, ok = false,
+					err = "unknown code"})
 		LobbyProtocol.T_REG:
 			info.kind = "match"
 			var id := next_id
@@ -176,10 +198,12 @@ func _dispatch(key: String, msg: Dictionary) -> void:
 				if str(old.ip) + ":" + str(int(old.port)) == game_key:
 					matches.erase(old_id)
 					match_dropped.emit(int(old_id))
+			var priv := bool(msg.get("private", false))  # D35: custom match
 			matches[id] = {
 				key = key,
 				ip = ip,
 				port = gport,
+				private = priv,
 				region = str(msg.get("region", region)),
 				team_size = clampi(int(msg.get("team_size", 3)), 1, 6),
 				humans = 0,
@@ -201,7 +225,14 @@ func _dispatch(key: String, msg: Dictionary) -> void:
 				skill_sum = 0,
 				ledger_humans = 0,
 			}
-			_send(key, {t = LobbyProtocol.T_REGACK, match_id = id})
+			var ra := {t = LobbyProtocol.T_REGACK, match_id = id}
+			if priv and bool(msg.get("room", false)):
+				var code := _new_code()
+				if code != "":
+					rooms[code] = id
+					matches[id].code = code
+					ra.code = code
+			_send(key, ra)
 			match_registered.emit(matches[id].duplicate())
 			print("LOBBY match %d registered: %s:%d region=%s (%s)" % [
 					id, ip, gport, str(matches[id].region), str(matches[id].name)])
@@ -403,6 +434,22 @@ func _drop(key: String) -> void:
 		client_dropped.emit()
 	_peers.erase(key)
 
+## D35: room-code helpers.
+func _new_code() -> String:
+	for i in 50:
+		var c := LobbyProtocol.gen_room_code(_rnd)
+		if not rooms.has(c):
+			return c
+	return ""
+
+func _release_code(match_id: int) -> void:
+	for c in rooms.keys():
+		if int(rooms[c]) == match_id:
+			rooms.erase(c)
+
+func _on_match_dropped(match_id: int) -> void:
+	_release_code(int(match_id))
+
 func _stage_of(w: Dictionary) -> int:
 	var t: float = time - float(w.joined_at)
 	if t < strict_until:
@@ -423,6 +470,8 @@ func _candidates(w: Dictionary) -> Array:
 	var cands: Array = []
 	for id in matches.keys():
 		var m: Dictionary = matches[id]
+		if bool(m.get("private", false)):
+			continue  # D35: custom matches are code-join only, never queued
 		if m.over:
 			continue
 		var room: int = int(m.team_size) - int(m.humans)
