@@ -26,10 +26,12 @@ func _ready() -> void:
 	world = World.new()
 	add_child(world)
 	add_child(Arena.build(world))
-	check("roster: 6 heroes registered", HeroRegistry.count() == 6, "n=%d" % HeroRegistry.count())
+	check("roster: 7 heroes registered (6 base + 1 starter_pack drop-in)",
+			HeroRegistry.count() == 7, "n=%d" % HeroRegistry.count())
 	# Balance config (content/balance/): one entry per registered hero.
-	check("balance: entry per hero", Balance.entry_count() == HeroRegistry.count(),
-		"entries=%d heroes=%d" % [Balance.entry_count(), HeroRegistry.count()])
+	check("balance: entry per base hero (mod heroes carry their own)",
+			Balance.entry_count() == HeroRegistry._base_heroes.size(),
+			"entries=%d heroes=%d" % [Balance.entry_count(), HeroRegistry.count()])
 	var missing := ""
 	for h in HeroRegistry.HEROES:
 		var hd0: HeroData = h

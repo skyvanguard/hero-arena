@@ -41,10 +41,10 @@ func _ready() -> void:
 # ---- 1-3: the variant bank (data) ------------------------------------------
 func _bank(cfg: ProgressionConfig) -> void:
 	var bank: HeroVariantBank = HeroVariantBank.load_bank()
-	var ok_sets := bank.sets.size() == HeroRegistry.HEROES.size()
+	var ok_sets := bank.sets.size() == HeroRegistry.heroes().size()
 	var all_have := true
 	var pin_ok := true
-	for h in HeroRegistry.HEROES:
+	for h in HeroRegistry.heroes():
 		var hd: HeroData = h
 		var s: HeroVariantSet = bank.set_for(hd.id)
 		if s == null or s.palette.size() < 4:
@@ -53,7 +53,7 @@ func _bank(cfg: ProgressionConfig) -> void:
 			pin_ok = false
 	check("bank: one variant set per registry hero (palette >= 4)",
 			ok_sets and all_have, "sets=%d heroes=%d" % [bank.sets.size(),
-			HeroRegistry.HEROES.size()])
+			HeroRegistry.heroes().size()])
 	check("bank: palette[0] is pinned to the hero's default color", pin_ok, "")
 	var sched_ok := true
 	for s in bank.sets:
@@ -172,7 +172,7 @@ func _ui(cfg: ProgressionConfig) -> void:
 	check("ui: hero-select shows the per-hero mastery line",
 			_find_label_text(hs, "MASTERY LV"), "")
 	check("ui: hero-select renders one variant dot per palette entry",
-			hs._variant_dots.size() == 6 * 5,
+			hs._variant_dots.size() == HeroRegistry.heroes().size() * 5,
 			"dots=%d" % hs._variant_dots.size())
 	var swatch_ok := false
 	for c in hs._cards:

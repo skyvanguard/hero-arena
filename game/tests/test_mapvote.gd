@@ -253,7 +253,7 @@ func _run() -> void:
 	var pool0: Array = MapRegistry.rotation_pool("")
 	var solo: Array = MapRegistry.rotation_pool("solo", ["solo"])
 	check("mapvote D27: rotation_pool excludes the map, falls back when solo",
-			pool.size() == 3 and not pool.has("crossdocks")
+			pool.size() == 4 and not pool.has("crossdocks")  # 5 maps (4 base + 1 drop-in) - 1 excluded
 			and pool0.size() == MapRegistry.ids().size() and solo == ["solo"],
 			"%s" % str([pool, pool0, solo]))
 	_finish()

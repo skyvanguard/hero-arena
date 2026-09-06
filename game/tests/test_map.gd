@@ -42,10 +42,11 @@ func _ready() -> void:
 	var cd: Map = MapRegistry.get_map("crossdocks")
 	var fo: Map = MapRegistry.get_map("foundry")
 	var unk: Map = MapRegistry.get_map("nonexistent")
-	check("registry: ids + all four maps + unknown->default",
-			MapRegistry.ids().size() == 4
+	check("registry: ids + all four base maps + 1 drop-in + unknown->default",
+			MapRegistry.ids().size() == 5
 			and MapRegistry.ids().has("crossdocks") and MapRegistry.ids().has("foundry")
 			and MapRegistry.ids().has("sawmill") and MapRegistry.ids().has("saltline")
+			and MapRegistry.ids().has("drift_flats")
 			and cd != null and cd.map_id == "crossdocks"
 			and fo != null and fo.map_id == "foundry"
 			and unk == cd, str(MapRegistry.ids()))
