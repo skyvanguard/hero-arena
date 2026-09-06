@@ -49,7 +49,7 @@ const CONFIG_PATH := "res://content/matchmaking.tres"
 @export var skill_k := 0.004
 
 static func load_config() -> MMConfig:
-	var r := ResourceLoader.load(CONFIG_PATH, "", ResourceLoader.CACHE_MODE_REUSE)
+	var r := ResourceLoader.load(ModLoader.resolve(CONFIG_PATH), "", ResourceLoader.CACHE_MODE_REUSE)
 	if r is MMConfig:
 		return r
 	return MMConfig.new()

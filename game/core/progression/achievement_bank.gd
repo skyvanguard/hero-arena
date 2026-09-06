@@ -10,7 +10,7 @@ const BANK_PATH := "res://content/achievements/achievements.tres"
 @export var achievements: Array = []
 
 static func load_bank() -> AchievementBank:
-	var r = load(BANK_PATH)
+	var r = load(ModLoader.resolve(BANK_PATH))
 	if r is AchievementBank:
 		return r
 	var empty := AchievementBank.new()

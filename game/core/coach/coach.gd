@@ -12,7 +12,7 @@ extends RefCounted
 const CONFIG_PATH := "res://content/coach/coach.tres"
 
 static func load_config() -> CoachConfig:
-	var r := ResourceLoader.load(CONFIG_PATH, "", ResourceLoader.CACHE_MODE_REUSE)
+	var r := ResourceLoader.load(ModLoader.resolve(CONFIG_PATH), "", ResourceLoader.CACHE_MODE_REUSE)
 	return r if r is CoachConfig else CoachConfig.new()
 
 static func tips(cfg: CoachConfig, row: Array, mode_id: String,

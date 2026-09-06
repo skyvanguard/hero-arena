@@ -36,6 +36,11 @@ static func entry_for(hero_id: String) -> BalanceEntry:
 		var entry: BalanceEntry = e
 		if entry.hero_id == hero_id:
 			return entry
+	# D34: mod balance entries (mods can tune their own heroes).
+	for p in ModLoader.mod_files("balance/entries"):
+		var r: Resource = ResourceLoader.load(p, "", ResourceLoader.CACHE_MODE_REUSE)
+		if r is BalanceEntry and str((r as BalanceEntry).hero_id) == hero_id:
+			return r
 	return null
 
 static func entry_count() -> int:

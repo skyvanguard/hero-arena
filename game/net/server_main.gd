@@ -25,6 +25,7 @@ var _ctllog_n := 0
 
 func _ready() -> void:
 	randomize()
+	HeroRegistry.heroes()  # D34: merge drop-in mod heroes before any roster read
 	var port := MatchConfig.net_port
 	var dport := MatchConfig.net_discovery_port
 	var relay_addr := ""
@@ -64,7 +65,7 @@ func _ready() -> void:
 	# world is render-only (UI state arrives via E_PERK + snapshot fields).
 	world.perk_system = PerkSystem.new()
 	world.add_child(world.perk_system)
-	world.perk_system.setup(world, load("res://content/perks/perks.tres"), randi())
+	world.perk_system.setup(world, load(ModLoader.resolve("res://content/perks/perks.tres")), randi())
 	net = MatchServer.new()
 	add_child(net)
 	net.setup(world, port, size)

@@ -284,7 +284,7 @@ func _enter() -> void:
 	hud.set_state("IN MATCH  ·  slot %d" % my_id)
 	# D25: the client's perk pool (same content resource as the server) for
 	# resolving E_PERK pool indices to names; card taps become input edges.
-	_perk_pool = load("res://content/perks/perks.tres")
+	_perk_pool = load(ModLoader.resolve("res://content/perks/perks.tres"))
 	hud.perk_chosen.connect(_on_perk_chosen)
 	_pred_on = MatchConfig.net_prediction
 	if _pred_on:

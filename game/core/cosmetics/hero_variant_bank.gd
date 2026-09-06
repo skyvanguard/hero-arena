@@ -8,9 +8,24 @@ const BANK_PATH := "res://content/cosmetics/hero_variants.tres"
 @export var sets: Array = []
 
 static func load_bank() -> HeroVariantBank:
-	var r = load(BANK_PATH)
+	var r = load(ModLoader.resolve(BANK_PATH))
 	if r is HeroVariantBank:
-		return r
+		# Shallow copy: the cached base bank is read-only (mutating it would
+		# leak mod sets into the ResourceLoader cache - D29 lesson).
+		var b := HeroVariantBank.new()
+		b.sets = (r as HeroVariantBank).sets.duplicate(false)
+		# D34: mod cosmetic sets (only for hero_ids without a base set).
+		var have: Dictionary = {}
+		for s in b.sets:
+			have[str(s.hero_id)] = true
+		for p in ModLoader.mod_files("cosmetics"):
+			var mr: Resource = ResourceLoader.load(p, "", ResourceLoader.CACHE_MODE_REUSE)
+			if mr is HeroVariantBank:
+				for ms in (mr as HeroVariantBank).sets:
+					if ms is HeroVariantSet and not have.has(str(ms.hero_id)):
+						b.sets.append(ms)
+						have[str(ms.hero_id)] = true
+		return b
 	var empty := HeroVariantBank.new()
 	empty.sets = []
 	return empty
@@ -63,5 +78,5 @@ static func variant_unlocked(bank: HeroVariantBank, profile: PlayerProfile,
 	return false
 
 static func _cfg() -> ProgressionConfig:
-	var r = load("res://content/progression.tres")
+	var r = load(ModLoader.resolve("res://content/progression.tres"))
 	return r if r is ProgressionConfig else null

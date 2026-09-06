@@ -6,7 +6,21 @@ const DEFAULT_ID := "crossdocks"
 const DIR := "res://content/maps/"
 
 static func ids() -> Array:
-	return ["crossdocks", "foundry", "sawmill", "saltline"]
+	# Base maps by directory scan (no hardcoded pool) + D34 mod maps.
+	var out: Array = []
+	var dir := DirAccess.open(DIR)
+	if dir != null:
+		dir.list_dir_begin()
+		var f := dir.get_next()
+		while f != "":
+			if not dir.current_is_dir() and f.ends_with(".tres"):
+				out.append(f.get_basename())
+			f = dir.get_next()
+	for p in ModLoader.mod_files("maps"):
+		var bn: String = p.get_file().get_basename()
+		if not out.has(bn):
+			out.append(bn)
+	return out
 
 ## D27 (anti-repetition): the valid vote pool for the NEXT match - every
 ## registered map except the one named (the just-played / current map).
@@ -22,8 +36,13 @@ static func rotation_pool(exclude: String = "", ids: Array = []) -> Array:
 
 static func get_map(id: String) -> Map:
 	var mid := id if id != "" else DEFAULT_ID
-	var path := DIR + mid + ".tres"
-	if mid in ids() and ResourceLoader.exists(path):
+	if mid in ids():
+		var path := DIR + mid + ".tres"
+		if not ResourceLoader.exists(path):
+			for p in ModLoader.mod_files("maps"):
+				if p.get_file() == mid + ".tres":
+					path = p
+					break
 		var r: Resource = load(path)
 		if r is Map:
 			return r

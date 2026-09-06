@@ -35,8 +35,9 @@ var _results: CanvasLayer = null
 
 func _ready() -> void:
 	randomize()
-	progression = load("res://content/progression.tres") as ProgressionConfig
-	coach_cfg = load("res://content/coach/coach.tres") as CoachConfig
+	HeroRegistry.heroes()  # D34: merge drop-in mod heroes before any roster read
+	progression = load(ModLoader.resolve("res://content/progression.tres")) as ProgressionConfig
+	coach_cfg = load(ModLoader.resolve("res://content/coach/coach.tres")) as CoachConfig
 	profile = PlayerProfile.load(progression)
 	_bank = HeroVariantBank.load_bank()
 	if DisplayServer.get_name() == "headless":

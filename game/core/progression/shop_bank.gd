@@ -19,7 +19,7 @@ static func load_bank() -> ShopBank:
 	# Untyped on purpose: ShopBank is a RefCounted container, not a
 	# Resource - a typed Resource return makes the `is` check a parse
 	# error (same reason as EventBank/AchievementBank).
-	var r = ResourceLoader.load(BANK_PATH, "", ResourceLoader.CACHE_MODE_REUSE)
+	var r = ResourceLoader.load(ModLoader.resolve(BANK_PATH), "", ResourceLoader.CACHE_MODE_REUSE)
 	if r is ShopBank:
 		b.items = r.items.duplicate(false)
 		b.gear_per_match = r.gear_per_match

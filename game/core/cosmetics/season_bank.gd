@@ -10,7 +10,7 @@ const BANK_PATH := "res://content/cosmetics/seasons.tres"
 @export var current_season := ""
 
 static func load_seasons() -> SeasonBank:
-	var r = load(BANK_PATH)
+	var r = load(ModLoader.resolve(BANK_PATH))
 	if r is SeasonBank:
 		return r
 	var empty := SeasonBank.new()

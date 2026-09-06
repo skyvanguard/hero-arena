@@ -17,7 +17,7 @@ static func load_bank() -> EventBank:
 	var b := EventBank.new()
 	# Untyped on purpose: EventBank is a RefCounted container, not a
 	# Resource - a typed Resource return makes the `is` check a parse error.
-	var r = ResourceLoader.load(BANK_PATH, "", ResourceLoader.CACHE_MODE_REUSE)
+	var r = ResourceLoader.load(ModLoader.resolve(BANK_PATH), "", ResourceLoader.CACHE_MODE_REUSE)
 	if r is EventBank:
 		# Array is a copy (not the cached resource's); the EventData entries
 		# are shared resources - the engine treats them as READ-ONLY (a test
