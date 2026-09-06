@@ -37,6 +37,9 @@ var _variant_dots: Array = []
 ## D24: control customization panel (persisted in the profile; the in-match
 ## touch layer resolves baseline layout x these settings).
 var _ctl_btn: Button = null
+## D31: the shop overlay (cosmetic-only; see docs/GAME_DESIGN "Shop").
+var _shop_btn: Button = null
+var _shop_panel: Control = null
 var _ctl_panel: Control = null
 var _ctl_settings: ControlSettings = null
 var _ctl_vals: Array = []   # {label, key, min, max} per numeric row
@@ -101,13 +104,9 @@ func _draw_dot(dot: Control, st: Dictionary, s: HeroVariantSet) -> void:
 				false, 1.0)
 
 func _refresh_dot_state(st: Dictionary, s: HeroVariantSet, hd: HeroData) -> void:
-	var lvl := 0
-	if profile != null and progression != null:
-		lvl = profile.mastery_level_of(progression, hd.id)
-	var need := 0
-	if int(st.idx) < s.unlock_levels.size():
-		need = int(s.unlock_levels[int(st.idx)])
-	st.unlocked = lvl >= need
+	# D31: mastery gate OR any cosmetic grant (ach / event / shop).
+	st.unlocked = HeroVariantBank.variant_unlocked(_bank, profile,
+			progression, hd.id, int(st.idx))
 	st.selected = (profile != null and profile.selected_variant(hd.id) == int(st.idx)) \
 			or (profile == null and int(st.idx) == 0)
 
@@ -117,11 +116,9 @@ func _on_variant_tap(hd: HeroData, idx: int) -> void:
 	var s: HeroVariantSet = _bank.set_for(hd.id)
 	if s == null:
 		return
-	var need := 0
-	if idx < s.unlock_levels.size():
-		need = int(s.unlock_levels[idx])
-	if profile.mastery_level_of(progression, hd.id) < need:
-		return  # locked: needs more mastery
+	if not HeroVariantBank.variant_unlocked(_bank, profile, progression,
+				hd.id, idx):
+		return  # locked: needs more mastery or a cosmetic grant
 	profile.set_variant(hd.id, idx)
 	for d in _variant_dots:
 		if d.hero == hd:
@@ -255,6 +252,7 @@ func _build() -> void:
 	_make_mode_row(vp)
 	_make_online_row(vp)
 	_make_controls_row(vp)
+	_make_shop_btn(vp)
 
 func _draw_card(c: Control, hd: HeroData) -> void:
 	var selected := hd == _hero
@@ -902,4 +900,140 @@ func _draw_ctl_side(c: Control) -> void:
 	var t: String = str(c.get_meta("side_label"))
 	var sz := f.get_string_size(t, HORIZONTAL_ALIGNMENT_CENTER, r.size.x, 14, 15)
 	c.draw_string(f, Vector2((r.size.x - sz.x) * 0.5, 28.0), t, HORIZONTAL_ALIGNMENT_LEFT, -1, 15, Color.WHITE)
+
+## D31: the shop (monetization-ready, cosmetics-only). Bottom-left button,
+## mirroring the CONTROLS row; the panel lists the data-driven catalog
+## (ShopBank) with the GEAR balance. Purchases go through
+## PlayerProfile.buy_item (currency-agnostic, one-shot, grants a cosmetic
+## variant); the variant dots then reflect the grant via
+## HeroVariantBank.variant_unlocked. No real money anywhere in this path.
+func _make_shop_btn(vp: Vector2) -> void:
+	if profile == null:
+		return
+	_shop_btn = Button.new()
+	_shop_btn.text = "SHOP"
+	_shop_btn.position = Vector2(vp.x - 352.0, vp.y - 118.0)
+	_shop_btn.size = Vector2(84.0, 30.0)
+	_shop_btn.add_theme_font_size_override("font_size", 13)
+	_shop_btn.pressed.connect(_toggle_shop)
+	add_child(_shop_btn)
+
+var _shop_balance: Label = null
+var _shop_rows: Array = []   # {id, btn}
+
+func _toggle_shop() -> void:
+	if _shop_panel != null and _shop_panel.visible:
+		_close_shop()
+	else:
+		_show_shop()
+
+func _close_shop() -> void:
+	if _shop_panel != null:
+		_shop_panel.visible = false
+
+func _show_shop() -> void:
+	if _ctl_panel != null and _ctl_panel.visible:
+		_close_controls()
+	var vp := Vector2(get_viewport().get_visible_rect().size)
+	if _shop_panel == null:
+		_build_shop_panel(vp)
+	_refresh_shop()
+	_shop_panel.visible = true
+
+func _build_shop_panel(vp: Vector2) -> void:
+	_shop_panel = Control.new()
+	_shop_panel.name = "ShopPanel"
+	_shop_panel.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_shop_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_shop_panel)
+	# Dim layer: tap outside the panel closes it (same pattern as controls).
+	var dim := ColorRect.new()
+	dim.color = Color(0.02, 0.03, 0.05, 0.7)
+	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
+	dim.mouse_filter = Control.MOUSE_FILTER_STOP
+	dim.gui_input.connect(func(ev: InputEvent) -> void:
+		if _ctl_tap_pressed(ev):
+			_close_shop()
+	)
+	_shop_panel.add_child(dim)
+	var bg := ColorRect.new()
+	bg.color = Color(0.08, 0.10, 0.15, 1.0)
+	bg.position = Vector2(vp.x * 0.5 - 210.0, vp.y * 0.5 - 240.0)
+	bg.size = Vector2(420.0, 480.0)
+	_shop_panel.add_child(bg)
+	var t := Label.new()
+	t.text = "SHOP  (cosmetic only)"
+	t.position = Vector2(vp.x * 0.5 - 200.0, vp.y * 0.5 - 228.0)
+	t.size = Vector2(400.0, 24.0)
+	t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	t.add_theme_font_size_override("font_size", 20)
+	t.modulate = Color(0.9, 0.95, 1.0)
+	t.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_shop_panel.add_child(t)
+	_shop_balance = Label.new()
+	_shop_balance.position = Vector2(vp.x * 0.5 - 200.0, vp.y * 0.5 - 204.0)
+	_shop_balance.size = Vector2(400.0, 20.0)
+	_shop_balance.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_shop_balance.add_theme_font_size_override("font_size", 15)
+	_shop_balance.modulate = Color(1.0, 0.85, 0.4)
+	_shop_balance.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_shop_panel.add_child(_shop_balance)
+	var close := Button.new()
+	close.text = "CLOSE"
+	close.position = Vector2(vp.x * 0.5 + 140.0, vp.y * 0.5 + 204.0)
+	close.size = Vector2(64.0, 26.0)
+	close.add_theme_font_size_override("font_size", 12)
+	close.pressed.connect(_close_shop)
+	_shop_panel.add_child(close)
+	var bank := ShopBank.load_bank()
+	var x0 := vp.x * 0.5 - 210.0 + 10.0
+	var y := vp.y * 0.5 - 178.0
+	for e in bank.items:
+		if not (e is ShopItemData):
+			continue
+		var it: ShopItemData = e
+		var nl := Label.new()
+		nl.text = it.display_name
+		nl.position = Vector2(x0, y)
+		nl.size = Vector2(240.0, 18.0)
+		nl.add_theme_font_size_override("font_size", 14)
+		nl.modulate = Color(0.92, 0.94, 1.0)
+		nl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_shop_panel.add_child(nl)
+		var el := Label.new()
+		el.text = "Unlocks " + it.desc + "  (cosmetic)"
+		el.position = Vector2(x0, y + 17.0)
+		el.size = Vector2(260.0, 16.0)
+		el.add_theme_font_size_override("font_size", 11)
+		el.modulate = Color(0.62, 0.68, 0.8)
+		el.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_shop_panel.add_child(el)
+		var btn := Button.new()
+		btn.position = Vector2(x0 + 270.0, y + 2.0)
+		btn.size = Vector2(132.0, 30.0)
+		btn.add_theme_font_size_override("font_size", 13)
+		btn.pressed.connect(func() -> void: _buy_shop_item(it))
+		_shop_panel.add_child(btn)
+		_shop_rows.append({"id": it.id, "btn": btn})
+		y += 54.0
+
+func _refresh_shop() -> void:
+	if _shop_panel == null:
+		return
+	_shop_balance.text = "GEAR: " + str(profile.currency_of(ShopBank.CURRENCY)) \
+			+ "   (earned in matches)"
+	for row in _shop_rows:
+		var owned: bool = profile.shop_owned.has(str(row.id))
+		row.btn.text = "OWNED" if owned else "BUY"
+		row.btn.disabled = owned
+
+func _buy_shop_item(it: ShopItemData) -> void:
+	if not profile.buy_item(it):
+		_refresh_shop()   # not enough gear: the balance row is the answer
+		return
+	_refresh_shop()
+	# The grant unlocks the variant dots (mastery OR grant).
+	for d in _variant_dots:
+		_refresh_dot_state(d.st, d.set, d.hero)
+		d.ctrl.queue_redraw()
 

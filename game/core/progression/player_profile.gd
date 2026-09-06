@@ -34,6 +34,12 @@ var event_done: Dictionary = {}
 ## D29: hero_id -> Array[variant_idx] unlocked by events (cosmetic early
 ## access; the variant bank takes the max of mastery + ach + event grants).
 var event_variant_unlocks: Dictionary = {}
+## D31: currency_id -> int ("gear" is earned in matches; no real money).
+var currency: Dictionary = {}
+## D31: shop item id -> true (one-shot; never re-bought).
+var shop_owned: Dictionary = {}
+## D31: hero_id -> Array[variant_idx] unlocked by shop purchases (cosmetic).
+var shop_variant_unlocks: Dictionary = {}
 ## D24 control customization (ControlSettings.to_dict(); old saves default
 ## {} = stock layout).
 var controls: Dictionary = {}
@@ -66,6 +72,20 @@ static func load(cfg: ProgressionConfig) -> PlayerProfile:
 			p.event_progress = d.get("event_progress", {})
 			p.event_done = d.get("event_done", {})
 			p.event_variant_unlocks = d.get("event_variant_unlocks", {})
+			# Old saves (pre-D31) have no shop blocks - defaults win.
+			p.currency = d.get("currency", {})
+			p.shop_owned = d.get("shop_owned", {})
+			p.shop_variant_unlocks = d.get("shop_variant_unlocks", {})
+			# JSON round-trips ints as floats - normalize the cosmetic grant
+			# lists to ints so Array.has(int) works after a reload (buy_item
+			# dedup, the variant dots, color_for).
+			for src in [p.ach_variant_unlocks, p.event_variant_unlocks,
+					p.shop_variant_unlocks]:
+				for h in src.keys():
+					var norm: Array = []
+					for v in src[h]:
+						norm.append(int(v))
+					src[h] = norm
 	return p
 
 ## Test helper: serialize this profile straight to the save path without
@@ -81,7 +101,9 @@ func save() -> void:
 		"total_mvp": total_mvp, "best_streak": best_streak,
 		"achievements": achievements, "ach_variant_unlocks": ach_variant_unlocks,
 		"event_progress": event_progress, "event_done": event_done,
-		"event_variant_unlocks": event_variant_unlocks}
+		"event_variant_unlocks": event_variant_unlocks,
+		"currency": currency, "shop_owned": shop_owned,
+		"shop_variant_unlocks": shop_variant_unlocks}
 	var f := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
 	if f != null:
 		f.store_string(JSON.stringify(d))
@@ -123,9 +145,44 @@ func apply_match(cfg: ProgressionConfig, hero_id: String, won: bool,
 	var unlocked: Array = AchievementBank.newly_unlocked(self)
 	# D29: event progress + one-shot completions (cosmetic rewards only).
 	var events := EventBank.events_completed(self, won, is_mvp, mode_id)
+	# D31: gear earning (data-driven rates; the only currency today).
+	var gear: int = ShopBank.gear_for(won)
+	if gear > 0:
+		add_currency(ShopBank.CURRENCY, gear)
 	save()
 	return {"xp_gained": gained, "level_before": before, "level_after": level,
 		"achievements_unlocked": unlocked, "events_completed": events}
+
+## D31: every cosmetic grant source (achievement / event / shop variant
+## unlocks) - the variant bank + the variant dots iterate this list, so
+## a new grant source is one line here and it is honored everywhere.
+func grant_sources() -> Array:
+	return [ach_variant_unlocks, event_variant_unlocks, shop_variant_unlocks]
+
+## D31: currency ledger (currency-agnostic - "gear" today; a payment
+## provider can add currencies without touching this path).
+func add_currency(id: String, amount: int) -> void:
+	currency[id] = int(currency.get(id, 0)) + int(amount)
+
+func currency_of(id: String) -> int:
+	return int(currency.get(id, 0))
+
+## D31: the purchase engine (cosmetic-only by schema - see
+## ShopItemData). One-shot per item; false when already owned or the
+## balance is short. Grants the item's cosmetic variant on success.
+func buy_item(item: ShopItemData) -> bool:
+	if shop_owned.has(item.id):
+		return false
+	if currency_of(item.currency) < item.price:
+		return false
+	currency[item.currency] = currency_of(item.currency) - item.price
+	shop_owned[item.id] = true
+	var list: Array = shop_variant_unlocks.get(item.hero_id, [])
+	if not list.has(item.variant_idx):
+		list.append(item.variant_idx)
+		shop_variant_unlocks[item.hero_id] = list
+	save()
+	return true
 
 ## D22: select a cosmetic variant (index 0 = the hero's default color).
 ## The UI validates the unlock; the accessor clamps defensively.

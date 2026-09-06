@@ -1,0 +1,82 @@
+[gd_resource type="Resource" script_class="ShopBank" load_steps=11 format=3]
+
+[ext_resource type="Script" path="res://core/progression/shop_bank.gd" id="1_sh"]
+[ext_resource type="Script" path="res://core/progression/shop_item_data.gd" id="2_sh"]
+
+[sub_resource type="Resource" id="Resource_kes1"]
+script = ExtResource("2_sh")
+id = "kestrel_crimson"
+display_name = "Crimson Kestrel"
+desc = "Kestrel - variant 2"
+hero_id = "kestrel"
+variant_idx = 1
+price = 250
+
+[sub_resource type="Resource" id="Resource_nim1"]
+script = ExtResource("2_sh")
+id = "nimbus_azure"
+display_name = "Azure Nimbus"
+desc = "Nimbus - variant 2"
+hero_id = "nimbus"
+variant_idx = 1
+price = 250
+
+[sub_resource type="Resource" id="Resource_pat1"]
+script = ExtResource("2_sh")
+id = "patch_onyx"
+display_name = "Onyx Patch"
+desc = "Patch - variant 2"
+hero_id = "patch"
+variant_idx = 1
+price = 350
+
+[sub_resource type="Resource" id="Resource_bas3"]
+script = ExtResource("2_sh")
+id = "bastion_frost"
+display_name = "Frost Bastion"
+desc = "Bastion - variant 4"
+hero_id = "bastion"
+variant_idx = 3
+price = 600
+
+[sub_resource type="Resource" id="Resource_blz3"]
+script = ExtResource("2_sh")
+id = "blitz_solar"
+display_name = "Solar Blitz"
+desc = "Blitz - variant 4"
+hero_id = "blitz"
+variant_idx = 3
+price = 600
+
+[sub_resource type="Resource" id="Resource_mir3"]
+script = ExtResource("2_sh")
+id = "mira_gilded"
+display_name = "Gilded Mira"
+desc = "Mira - variant 4"
+hero_id = "mira"
+variant_idx = 3
+price = 600
+
+[sub_resource type="Resource" id="Resource_kes4"]
+script = ExtResource("2_sh")
+id = "kestrel_veiled"
+display_name = "Veiled Kestrel"
+desc = "Kestrel - variant 5"
+hero_id = "kestrel"
+variant_idx = 4
+price = 900
+
+[sub_resource type="Resource" id="Resource_mir4"]
+script = ExtResource("2_sh")
+id = "mira_prism"
+display_name = "Prism Mira"
+desc = "Mira - variant 5"
+hero_id = "mira"
+variant_idx = 4
+price = 900
+
+[resource]
+script = ExtResource("1_sh")
+items = Array[Resource]([SubResource("Resource_kes1"), SubResource("Resource_nim1"), SubResource("Resource_pat1"), SubResource("Resource_bas3"), SubResource("Resource_blz3"), SubResource("Resource_mir3"), SubResource("Resource_kes4"), SubResource("Resource_mir4")])
+gear_per_match = 25
+gear_per_win = 15
