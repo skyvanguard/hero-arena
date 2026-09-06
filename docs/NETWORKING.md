@@ -342,8 +342,11 @@ Dispatch is by first magic byte, channel-independent:
   heartbeat updates the directory mode; over matches accept votes (the
   results-screen flow). Verified on-device (emulator): results-screen vote
   row, CAP tap, lobby ack rendered as "CAPTURE 1 · leading CAPTURE".
-- `tests/test_mapvote.tscn` — **next-match map voting (round 35, 12
-  checks)**: registration carries the host map; bad-map votes ignored;
+- `tests/test_mapvote.tscn` — **next-match map voting (round 35, 17 checks;
+  round 44 D27 anti-repetition)**: registration carries the host map; bad-map
+  votes ignored; the entry's current map is rejected as a repeat (pre- and
+  post-decision, incl. weighted party votes) and the older map becomes
+  votable again once another plays (rotation); `rotation_pool` helper;
   one map vote per peer (last write wins); MODE and MAP tallies are
   independent per peer; split map votes hold; a strict majority flips the
   directory map, leaves the mode domain untouched, and forwards setmap;
@@ -383,15 +386,14 @@ Dispatch is by first magic byte, channel-independent:
   matched the client count exactly, so the pacing is server-confirmed). This
   is the strongest broadcast-leg evidence available without two physical
   phones; the real-WiFi two-phone sign-off remains the acceptance test.
-- Full battery: 28 headless suites, 529 checks (round-38 per-suite counts:
+- Full battery: 28 headless suites, 534 checks (round-38 per-suite counts:
   hero 42 + main 16 + roster 57 + bots 23 + projectile 10 + practice 11 +
   map 12 + mode_control 15 (round 30) + mode_capture 17 + mode_escort 11
   (rounds 31-32) + net 10 + net_props 20 + net_sim 10 + net_profiles 30 +
   lobby 12 (round 13) + match_lifecycle 8 (round 28) + relay 7 (round 29) +
   results 18 (round 33; +1 round 36 regression) + vote 13 (round 34) +
-  mapvote 12 (round 35) + cosmetics 21 (round 36; D22 mastery/variants are
-  client-side - no wire changes) + partyvote 20 (round 37; D23 weighted
-  voting, real UDP lobby) + controls 25 (round 38; D24 layout x settings,
+  mapvote 17 (round 35; +5 D27 anti-repetition, round 44) + cosmetics 21 (round 36; D22 mastery/variants are
+  client-side - no wire changes) + partyvote 20 (round 37; D23 weighted; round 44: map-domain scenarios moved off the default map for the D27 repeat rule, same 20 checks; D23 weighted voting, real UDP lobby) + controls 25 (round 38; D24 layout x settings,
   headless-resolved) + discovery 6 + perks 38 (round 40; D25 in-match
   perks: XP curve, role-filtered offers, determinism, every effect key,
   bot picks, reset, E_PERK + snapshot round-trips incl. old-server
@@ -469,7 +471,7 @@ reliability**:
 | voteresult{match_id,tally,leading,decided,mode,[party_vote]} | s->c | - | D20/D23: ack with the running WEIGHTED tally; the deciding voter's own ack already shows decided=true; party_vote=true acks a non-leader member (no weight added) |
 | setmode{match_id,mode} | s->s | - | D20: a strict majority decided; forwarded to the registered match server, which stores it for the next in-place match reset (a live match never changes rules mid-fight) |
 | mapvote{match_id,map,[party_id,party_size,leader]} | c->s | no | D21/D23: vote the match's NEXT map; same rules as vote, independent weighted tally |
-| mapvoteresult{match_id,tally,leading,decided,map,[party_vote]} | s->c | - | D21/D23: ack with the running weighted map tally (party_vote as voteresult) |
+| mapvoteresult{match_id,tally,leading,decided,map,repeat,[party_vote]} | s->c | - | D21/D23: ack with the running weighted map tally (party_vote as voteresult); D27: repeat = the entry's current map (excluded from the pool) |
 | setmap{match_id,map} | s->s | - | D21: a strict majority decided the map; the server rebuilds the arena (free old geometry, Arena.build) at the next in-place reset |
 
 ### 9.2a Next-match mode + map voting (D20/D21, rounds 34-35)

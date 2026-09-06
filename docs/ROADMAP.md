@@ -122,7 +122,7 @@
 - [x] Additional modes + map pool growth (2 more maps) - round 42: The Sawmill (48 m flanking corridors + central ridge) and Saltline (56 m open + elevated corners) as pure Map data; test_map now validates the whole pool (17 checks: integrity, bounds, mode-follow, 6-bot fight on the new map)
 - [x] Progression v2 (hero mastery, achievements, seasonal cosmetics — cosmetic only) - round 43: D26 - 10 data-driven achievements (conditions over server-stat-derived profile counters, one-shot, cosmetic rewards incl. early variant unlocks) + seasonal cosmetic packs (SeasonData/SeasonBank, Season 1 ships, current-season is content); mastery (D22) regression-tested; test_progression_v2 (23 checks); results overlay shows new achievements + season label
 - [ ] Monetization-ready shop architecture (optional; cosmetics-only rule enforced by content schema)
-- [ ] Map voting polish (anti-repetition rotation)
+- [x] Map voting polish (anti-repetition rotation) - round 44: D27 - the lobby rejects re-voting the entry's current (just-played / about-to-play) map while alternatives remain (`MapRegistry.rotation_pool`); `mapvoteresult` carries a `repeat` marker and the results UI grays the last map's button; test_mapvote 17 checks incl. rotation (the older map becomes votable again) + party-leader repeat gate; test_partyvote map scenarios updated to the rule
 - [ ] Matchmaking v2 (win-probability model, grouping-advantage handling, region prioritization for LATAM)
 - [ ] AI coaching (optional post-match tips from authoritative stats)
 - [ ] Events framework (participation/win/objective rewards; no hero-forcing)

@@ -207,6 +207,18 @@ Design rules: 3 spawn points per team with the CENTER spawn on the central
 lane (it doubles as the CTF base / escort endpoint), every asset inside the
 play area, and layouts that differ in geometry, not just reskin.
 
+## Map voting — anti-repetition (D27)
+
+Queue lobbies vote the map of the NEXT match (strict weighted majority,
+same rules as mode voting). To stop a lobby from parking on one map, the
+map the entry is currently playing (just played / about to play) is
+**excluded from the vote pool** — the server rejects a repeat vote while
+any alternative remains (a single-map pool falls back to the full list).
+The client grays out that map's vote button ("(last)") and the vote status
+line names it. Consequence: consecutive matches in one queue rotate across
+the pool; a map becomes votable again once another map has played. This is
+a lobby-rule change (D27), server-authoritative as every other vote rule.
+
 ## Progression v2 (Phase 7) — mastery, achievements, seasonal cosmetics
 
 All progression is **cosmetic-only** (the directive: no pay-to-win, nothing
