@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="HeroVariantBank" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://core/cosmetics/hero_variant_bank.gd" id="1_bank"]
+[ext_resource type="Script" path="res://core/cosmetics/hero_variant_set.gd" id="2_set"]
+
+[sub_resource type="Resource" id="set_vanta"]
+script = ExtResource("2_set")
+hero_id = "vanta"
+palette = [Color(0.45, 0.3, 0.62, 1), Color(0.62, 0.48, 0.85, 1), Color(0.24, 0.15, 0.4, 1), Color(0.75, 0.6, 0.95, 1), Color(0.55, 0.5, 0.62, 1)]
+unlock_levels = [0, 2, 4, 6, 8]
+
+[resource]
+script = ExtResource("1_bank")
+sets = Array[Resource]([SubResource("set_vanta")])

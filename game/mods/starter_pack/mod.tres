@@ -1,0 +1,12 @@
+[gd_resource type="Resource" script_class="ModManifest" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://core/modding/mod_manifest.gd" id="1_mm"]
+
+[resource]
+script = ExtResource("1_mm")
+id = "starter_pack"
+display_name = "Starter Pack"
+author = "hero-arena (reference community mod)"
+desc = "The reference drop-in mod: one original hero (Vanta, controller), one original map (Drift Flats), a cosmetic variant set, and the hero's baseline balance entry."
+version = "1.0.0"
+api_version = 1
