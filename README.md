@@ -59,7 +59,8 @@ reports and feature ideas both welcome (templates included).
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | System design: authoritative server, data-driven content, modules |
 | [docs/ROADMAP.md](docs/ROADMAP.md) | Phases 0–8 with exit criteria and the definition of success |
 | [AGENTS.md](AGENTS.md) | Rules for AI development agents on this repo |
-| [CONTRIBUTING.md](CONTRIBUTING.md) | How to contribute (license rules, commit style) |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | How to contribute (branch model, definition of done, asset-license checklist) |
+| [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) | How we treat each other in the repo and the lobby |
 
 *(NETWORKING.md, MOBILE.md, PERFORMANCE.md, GAME_DESIGN.md grow from Phase 1 onward — see ARCHITECTURE.md §3.)*
 
