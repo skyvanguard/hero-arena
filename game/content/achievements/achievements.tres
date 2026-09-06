@@ -1,0 +1,106 @@
+[gd_resource type="Resource" script_class="AchievementBank" load_steps=12 format=3]
+
+[ext_resource type="Script" path="res://core/progression/achievement_bank.gd" id="1_bank"]
+[ext_resource type="Script" path="res://core/progression/achievement_data.gd" id="2_ach"]
+
+[sub_resource type="Resource" id="ach_first_light"]
+script = ExtResource("2_ach")
+id = "first_light"
+display_name = "First Light"
+desc = "Play your first match."
+condition = 4
+target = 1
+reward = 0
+
+[sub_resource type="Resource" id="ach_momentum"]
+script = ExtResource("2_ach")
+id = "momentum"
+display_name = "Momentum"
+desc = "Win 10 matches."
+condition = 1
+target = 10
+reward = 0
+
+[sub_resource type="Resource" id="ach_relentless"]
+script = ExtResource("2_ach")
+id = "relentless"
+display_name = "Relentless"
+desc = "Land 100 kills."
+condition = 0
+target = 100
+reward = 0
+
+[sub_resource type="Resource" id="ach_marksman"]
+script = ExtResource("2_ach")
+id = "marksman"
+display_name = "Marksman"
+desc = "Land 25 headshots."
+condition = 2
+target = 25
+reward = 1
+reward_hero = "kestrel"
+reward_variant = 2
+
+[sub_resource type="Resource" id="ach_match_maker"]
+script = ExtResource("2_ach")
+id = "match_maker"
+display_name = "Match Maker"
+desc = "Be the match MVP 10 times."
+condition = 3
+target = 10
+reward = 1
+reward_hero = "patch"
+reward_variant = 2
+
+[sub_resource type="Resource" id="ach_wing_commander"]
+script = ExtResource("2_ach")
+id = "wing_commander"
+display_name = "Wing Commander"
+desc = "Play 15 matches as Kestrel."
+condition = 7
+target = 15
+hero = "kestrel"
+reward = 0
+
+[sub_resource type="Resource" id="ach_full_throttle"]
+script = ExtResource("2_ach")
+id = "full_throttle"
+display_name = "Full Throttle"
+desc = "Play 15 matches as Blitz."
+condition = 7
+target = 15
+hero = "blitz"
+reward = 0
+
+[sub_resource type="Resource" id="ach_rising_star"]
+script = ExtResource("2_ach")
+id = "rising_star"
+display_name = "Rising Star"
+desc = "Reach account level 10."
+condition = 5
+target = 10
+reward = 0
+
+[sub_resource type="Resource" id="ach_on_fire"]
+script = ExtResource("2_ach")
+id = "on_fire"
+display_name = "On Fire"
+desc = "Get a 5-kill streak in one match."
+condition = 6
+target = 5
+reward = 1
+reward_hero = "nimbus"
+reward_variant = 2
+
+[sub_resource type="Resource" id="ach_season_veteran"]
+script = ExtResource("2_ach")
+id = "season_veteran"
+display_name = "Season Veteran"
+desc = "Play 50 matches."
+condition = 4
+target = 50
+reward = 0
+
+[resource]
+script = ExtResource("1_bank")
+achievements = [SubResource("ach_first_light"), SubResource("ach_momentum"), SubResource("ach_relentless"), SubResource("ach_marksman"), SubResource("ach_match_maker"), SubResource("ach_wing_commander"), SubResource("ach_full_throttle"), SubResource("ach_rising_star"), SubResource("ach_on_fire"), SubResource("ach_season_veteran")]

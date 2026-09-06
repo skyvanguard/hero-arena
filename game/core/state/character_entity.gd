@@ -67,10 +67,15 @@ var _base_max_hp := 100.0  ## captured in _ready (pre-perk), D25
 var hp := 100.0
 var alive := true
 var death_pos := Vector3.ZERO
-## Match stats (D19 results/progression): accumulated server-side only.
+## Match stats (D19 results/progression; D26 headshots/streak for
+## achievements): accumulated server-side only.
 var kills := 0
 var deaths := 0
 var damage_dealt := 0.0
+var headshots := 0
+## Current kill streak (resets on death); best_streak = the match max.
+var streak := 0
+var best_streak := 0
 var world_ref: World = null
 var controller: Node = null          # BotController or player-input node
 var is_player := false

@@ -306,7 +306,8 @@ func stats_rows() -> Array:
 	var rows: Array = []
 	for ch in characters:
 		var c: CharacterEntity = ch
-		rows.append([int(c.team), int(c.kills), int(c.deaths), int(c.damage_dealt)])
+		rows.append([int(c.team), int(c.kills), int(c.deaths), int(c.damage_dealt),
+			int(c.headshots), int(c.best_streak)])
 	return rows
 
 ## MVP (D19): most kills, tie-break damage, tie-break lowest index; -1 when
@@ -340,9 +341,14 @@ func kill(target: CharacterEntity, source: CharacterEntity, is_head: bool) -> vo
 	target.death_pos = target.global_position
 	target.death_time = time
 	target.deaths += 1
+	target.streak = 0  # D26: a death ends the streak
 	if source != null:
 		score[source.team] = int(score.get(source.team, 0)) + 1
 		source.kills += 1
+		source.streak += 1
+		source.best_streak = maxi(source.best_streak, source.streak)
+		if is_head:
+			source.headshots += 1
 		if source.ability != null:
 			source.ability.on_kill()
 	# Respawn is authoritative and scheduled on the world clock (directive:

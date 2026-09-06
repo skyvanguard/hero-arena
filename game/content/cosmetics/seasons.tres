@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="SeasonBank" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://core/cosmetics/season_bank.gd" id="1_bank"]
+[ext_resource type="Script" path="res://core/cosmetics/season_data.gd" id="2_season"]
+
+[sub_resource type="Resource" id="season_1"]
+script = ExtResource("2_season")
+id = "s1"
+display_name = "Season 1 - First Forge"
+entries = [{"hero": "kestrel", "variant": 1}, {"hero": "blitz", "variant": 1}, {"hero": "bastion", "variant": 1}, {"hero": "mira", "variant": 1}, {"hero": "patch", "variant": 1}, {"hero": "nimbus", "variant": 1}]
+
+[resource]
+script = ExtResource("1_bank")
+seasons = [SubResource("season_1")]
+current_season = "s1"

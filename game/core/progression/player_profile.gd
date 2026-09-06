@@ -16,6 +16,17 @@ var wins := 0
 var per_hero: Dictionary = {}
 ## D22 cosmetic variant selection: hero_id -> palette index (0 = default).
 var variants: Dictionary = {}
+## D26 achievement counters (cumulative, server-stat-derived, cosmetic).
+var total_kills := 0
+var total_headshots := 0
+var total_mvp := 0
+var best_streak := 0
+## D26: id -> true (one-shot; never re-unlocks).
+var achievements: Dictionary = {}
+## D26: hero_id -> Array[variant_idx] unlocked by achievements (cosmetic
+## early access; the mastery gate still applies on top - the variant bank
+## takes the max of both).
+var ach_variant_unlocks: Dictionary = {}
 ## D24 control customization (ControlSettings.to_dict(); old saves default
 ## {} = stock layout).
 var controls: Dictionary = {}
@@ -37,6 +48,13 @@ static func load(cfg: ProgressionConfig) -> PlayerProfile:
 			p.variants = d.get("variants", {})
 			# Old saves (pre-D24) have no controls block - stock layout wins.
 			p.controls = d.get("controls", {})
+			# Old saves (pre-D26) have no achievement block - defaults win.
+			p.total_kills = int(d.get("total_kills", 0))
+			p.total_headshots = int(d.get("total_headshots", 0))
+			p.total_mvp = int(d.get("total_mvp", 0))
+			p.best_streak = int(d.get("best_streak", 0))
+			p.achievements = d.get("achievements", {})
+			p.ach_variant_unlocks = d.get("ach_variant_unlocks", {})
 	return p
 
 ## Test helper: serialize this profile straight to the save path without
@@ -47,16 +65,22 @@ static func save_profile_for_test(p: PlayerProfile) -> void:
 func save() -> void:
 	var d := {"level": level, "xp": xp, "total_xp": total_xp,
 		"matches": matches, "wins": wins, "per_hero": per_hero,
-		"variants": variants, "controls": controls}
+		"variants": variants, "controls": controls,
+		"total_kills": total_kills, "total_headshots": total_headshots,
+		"total_mvp": total_mvp, "best_streak": best_streak,
+		"achievements": achievements, "ach_variant_unlocks": ach_variant_unlocks}
 	var f := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
 	if f != null:
 		f.store_string(JSON.stringify(d))
 		f.close()
 
-## Apply one finished match. Returns {xp_gained, level_before, level_after}
-## for the results screen ("+XP" / "LEVEL UP!").
+## Apply one finished match. headshots/match_streak are D26 (achievement
+## counters); they default so pre-D26 call sites keep working. Returns
+## {xp_gained, level_before, level_after, achievements_unlocked} for the
+## results screen ("+XP" / "LEVEL UP!" / "*NEW* achievement").
 func apply_match(cfg: ProgressionConfig, hero_id: String, won: bool,
-		kills: int, is_mvp: bool) -> Dictionary:
+		kills: int, is_mvp: bool, headshots: int = 0,
+		match_streak: int = 0) -> Dictionary:
 	var gained := (cfg.xp_win if won else cfg.xp_lose) \
 			+ float(kills) * cfg.xp_kill \
 			+ (cfg.xp_mvp if is_mvp else 0.0)
@@ -66,6 +90,11 @@ func apply_match(cfg: ProgressionConfig, hero_id: String, won: bool,
 	matches += 1
 	if won:
 		wins += 1
+	total_kills += kills
+	total_headshots += maxi(headshots, 0)
+	best_streak = maxi(best_streak, maxi(match_streak, 0))
+	if is_mvp:
+		total_mvp += 1
 	var h: Dictionary = per_hero.get(hero_id, {})
 	h["plays"] = int(h.get("plays", 0)) + 1
 	h["wins"] = int(h.get("wins", 0)) + (1 if won else 0)
@@ -75,8 +104,11 @@ func apply_match(cfg: ProgressionConfig, hero_id: String, won: bool,
 	while xp >= cfg.xp_for_level(level):
 		xp -= cfg.xp_for_level(level)
 		level += 1
+	# D26: one-shot achievement evaluation (cosmetic rewards only).
+	var unlocked: Array = AchievementBank.newly_unlocked(self)
 	save()
-	return {"xp_gained": gained, "level_before": before, "level_after": level}
+	return {"xp_gained": gained, "level_before": before, "level_after": level,
+		"achievements_unlocked": unlocked}
 
 ## D22: select a cosmetic variant (index 0 = the hero's default color).
 ## The UI validates the unlock; the accessor clamps defensively.

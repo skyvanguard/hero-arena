@@ -87,7 +87,11 @@ func _on_net_ended(winner: int, score: Array, wtime: float, lost: bool,
 	if my_idx >= 0 and stats.size() > my_idx:
 		var row: Array = stats[my_idx]
 		info["level"] = profile.apply_match(progression, _net_client.my_hero_id,
-				winner == _net_client.my_team, int(row[1]), mvp == my_idx)
+				winner == _net_client.my_team, int(row[1]), mvp == my_idx,
+				int(row[4]) if row.size() > 4 else 0,
+				int(row[5]) if row.size() > 5 else 0)
+		# D26: newly unlocked achievements (cosmetic rewards only).
+		info["achievements"] = info["level"].get("achievements_unlocked", [])
 	var ids_m: Array = ModeRegistry.ids()
 	var ids_map: Array = MapRegistry.ids()
 	var mc: int = _net_client._mode_code if _net_client != null else 0
@@ -253,7 +257,10 @@ func _on_world_event(name: String, data: Dictionary) -> void:
 	if my_idx >= 0:
 		var row: Array = stats[my_idx]
 		info["level"] = profile.apply_match(progression, _my_hero_id, winner == 0,
-				int(row[1]), mvp == my_idx)
+				int(row[1]), mvp == my_idx,
+				int(row[4]) if row.size() > 4 else 0,
+				int(row[5]) if row.size() > 5 else 0)
+		info["achievements"] = info["level"].get("achievements_unlocked", [])
 	info["label"] = MatchConfig.mode_id.to_upper() \
 			+ "  ·  " + MapRegistry.get_map(MatchConfig.map_id).short_name.to_upper()
 	_show_results(winner, sc, wtime, "", info)
@@ -394,6 +401,43 @@ func _show_results(winner: int, score: Array, wtime: float, title_override := ""
 		ml.modulate = Color(0.7, 0.78, 0.95)
 		_results.add_child(ml)
 		y += 28.0
+	# D26: newly unlocked achievements (cosmetic rewards only; data-driven).
+	var ach: Array = info.get("achievements", [])
+	if ach.size() > 0:
+		var ah := Label.new()
+		ah.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		ah.text = "NEW ACHIEVEMENTS"
+		ah.position = Vector2(vp.x * 0.5 - 230, y + 2)
+		ah.size = Vector2(460, 20)
+		ah.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		ah.add_theme_font_size_override("font_size", 15)
+		ah.modulate = Color(1.0, 0.85, 0.4)
+		_results.add_child(ah)
+		var rows: Array = AchievementBank.view_rows(ach)
+		y += 24.0
+		for i in rows.size():
+			var ar := Label.new()
+			ar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			ar.text = str(rows[i])
+			ar.position = Vector2(vp.x * 0.5 - 230, y)
+			ar.size = Vector2(460, 20)
+			ar.add_theme_font_size_override("font_size", 14)
+			ar.modulate = Color(0.9, 0.9, 0.95)
+			_results.add_child(ar)
+			y += 20.0
+	# D26: the current seasonal cosmetic track (data; cosmetic-only).
+	var sname: String = SeasonBank.current_name()
+	if sname != "":
+		var sl := Label.new()
+		sl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		sl.text = "SEASON  " + sname.to_upper() + "  (cosmetic track)"
+		sl.position = Vector2(vp.x * 0.5 - 200, y + 4)
+		sl.size = Vector2(400, 18)
+		sl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		sl.add_theme_font_size_override("font_size", 13)
+		sl.modulate = Color(0.6, 0.68, 0.85)
+		_results.add_child(sl)
+		y += 22.0
 	# Next-match mode vote (D20, net + lobby only): four mode buttons; the
 	# lobby tallies (one vote per peer, last write wins) and a strict
 	# majority decides - the match server applies it at the next reset.
